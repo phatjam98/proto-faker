@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+option java_package = "com.phatjam98.protofaker.test";
+
+message Test {
+  string string_value = 1;
+  double double_value = 2;
+  float float_value = 3;
+  int64 int64_value = 4;
+  uint64 uint64_value = 5;
+  fixed64 fixed64_value = 6;
+  sfixed64 sfixed64_value = 7;
+  sint64 sint64_value = 8;
+  int32 int32_value = 9;
+  uint32 uint32_value = 10;
+  fixed32 fixed32_value = 11;
+  sfixed32 sfixed32_value = 12;
+  sint32 sint32_value = 13;
+  bool bool_value = 14;
+  TestEnum enum_value = 15;
+  bytes bytes_value = 16;
+  NestedMessage nested_message = 17;
+  repeated string repeated_string_value = 18;
+  repeated int32 repeated_int32_value = 19;
+  repeated NestedMessage repeated_nested_message = 20;
+}
+
+message NestedMessage {
+  string string_value = 1;
+  double double_value = 2;
+  float float_value = 3;
+  int64 int64_value = 4;
+  uint64 uint64_value = 5;
+  fixed64 fixed64_value = 6;
+  sfixed64 sfixed64_value = 7;
+  sint64 sint64_value = 8;
+  int32 int32_value = 9;
+  uint32 uint32_value = 10;
+  fixed32 fixed32_value = 11;
+  sfixed32 sfixed32_value = 12;
+  sint32 sint32_value = 13;
+  bool bool_value = 14;
+  TestEnum enum_value = 15;
+  bytes bytes_value = 16;
+}
+
+enum TestEnum {
+  UNKNOWN_TEST_ENUM = 0;
+  TEST_ENUM_1 = 1;
+  TEST_ENUM_2 = 2;
+}
