@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import com.phatjam98.protofaker.test.TestOuterClass
 import spock.lang.Specification
 
-class LibraryTest extends Specification {
+class ProtoFakerSpec extends Specification {
     def "fake returns full proto"() {
         given:
         var protoFaker = new ProtoFaker<TestOuterClass.Test>()

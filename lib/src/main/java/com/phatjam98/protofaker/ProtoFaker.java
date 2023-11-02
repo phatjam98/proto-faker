@@ -10,16 +10,33 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * ProtoFaker is used to generate fake data for protobuf messages. This is useful for testing
+ * purposes. It utilizes Java Faker to generate fake data. It is not meant to be used in production
+ * code.
+ *
+ * @param <T> Some generated Protobuf Class
+ */
 public class ProtoFaker<T extends GeneratedMessageV3> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ProtoFaker.class);
 
   private final Faker faker;
 
+  /**
+   * Create a new ProtoFaker instance.
+   */
   public ProtoFaker() {
     this.faker = new Faker();
   }
 
+  /**
+   * Create a new fake protobuf message for the given Protobuf Class. This will generate fake data
+   * for all fields in the protobuf message.
+   *
+   * @param clazz Protobuf Class
+   * @return Fake protobuf message
+   */
   public T fake(Class<T> clazz) {
     Descriptors.Descriptor descriptor = getDescriptor(clazz);
     T.Builder builder = getBuilder(clazz);
@@ -40,6 +57,30 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     }
 
     return (T) builder.build();
+  }
+
+  /**
+   * Create a new fake protobuf message using a base protobuf message as a template. This will
+   * merge the populated fields from the base protobuf message with fake data for all other fields.
+   *
+   * @param baseProto Base protobuf message to use as a template
+   * @return Fake protobuf message
+   */
+  public T fake(T baseProto) {
+    Class<T> clazz = (Class<T>) baseProto.getClass();
+    var fakeProto = fake(clazz);
+    var builder = fakeProto.toBuilder();
+    builder.mergeFrom(baseProto);
+
+    return (T) builder.build();
+  }
+
+  public List<T> fakes(Class<T> clazz, int count) {
+    return null;
+  }
+
+  public List<T> fakes(T baseProto, int count) {
+    return null;
   }
 
   private Object getFakeDataForField(Descriptors.FieldDescriptor field, T.Builder builder) {
@@ -95,18 +136,6 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     }
 
     return builder;
-  }
-
-  public T fake(T baseProto) {
-    return null;
-  }
-
-  public List<T> fakes(Class<T> clazz, int count) {
-    return null;
-  }
-
-  public List<T> fakes(T baseProto, int count) {
-    return null;
   }
 
   private Descriptors.Descriptor getDescriptor(
