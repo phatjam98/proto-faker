@@ -6,6 +6,7 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.GeneratedMessageV3;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,13 +21,14 @@ import org.slf4j.LoggerFactory;
 public class ProtoFaker<T extends GeneratedMessageV3> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ProtoFaker.class);
-
+  private final Class<T> clazz;
   private final Faker faker;
 
   /**
    * Create a new ProtoFaker instance.
    */
-  public ProtoFaker() {
+  public ProtoFaker(Class<T> clazz) {
+    this.clazz = clazz;
     this.faker = new Faker();
   }
 
@@ -34,10 +36,9 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
    * Create a new fake protobuf message for the given Protobuf Class. This will generate fake data
    * for all fields in the protobuf message.
    *
-   * @param clazz Protobuf Class
    * @return Fake protobuf message
    */
-  public T fake(Class<T> clazz) {
+  public T fake() {
     Descriptors.Descriptor descriptor = getDescriptor(clazz);
     T.Builder builder = getBuilder(clazz);
 
@@ -67,58 +68,111 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
    * @return Fake protobuf message
    */
   public T fake(T baseProto) {
-    Class<T> clazz = (Class<T>) baseProto.getClass();
-    var fakeProto = fake(clazz);
+    var fakeProto = fake();
     var builder = fakeProto.toBuilder();
     builder.mergeFrom(baseProto);
 
     return (T) builder.build();
   }
 
-  public List<T> fakes(Class<T> clazz, int count) {
-    return null;
+  /**
+   * Create a list of fake protobuf messages.
+   *
+   * @param count Number of fake protobuf messages to create
+   * @return List of fake protobuf messages
+   */
+  public List<T> fakes(int count) {
+    List<T> fakeProtos = new ArrayList<>();
+
+    for (int i = 0; i < count; i++) {
+      fakeProtos.add(fake());
+    }
+
+    return fakeProtos;
   }
 
+  /**
+   * Create a list of fake protobuf messages using a base protobuf message as a template.
+   *
+   * @param baseProto Base protobuf message to use as a template
+   * @param count Number of fake protobuf messages to create
+   * @return List of fake protobuf messages
+   */
   public List<T> fakes(T baseProto, int count) {
-    return null;
+    List<T> fakeProtos = new ArrayList<>();
+
+    for (int i = 0; i < count; i++) {
+      fakeProtos.add(fake(baseProto));
+    }
+
+    return fakeProtos;
+  }
+
+  /**
+   * Create a list of fake protobuf messages using a list of base protobuf messages as a template.
+   *
+   * @param baseProtos List of base protobuf messages to use as a template
+   * @return List of fake protobuf messages
+   */
+  public List<T> fakes(List<T> baseProtos) {
+    List<T> fakeProtos = new ArrayList<>();
+
+    for (T baseProto : baseProtos) {
+      fakeProtos.add(fake(baseProto));
+    }
+
+    return fakeProtos;
   }
 
   private Object getFakeDataForField(Descriptors.FieldDescriptor field, T.Builder builder) {
     var type = field.getType();
+    Object fakeData;
+
     switch (type) {
       case DOUBLE:
-        return faker.number().randomDouble(2, 0, 100);
+        fakeData = faker.number().randomDouble(2, 0, 100);
+        break;
       case FLOAT:
-        return (float) faker.number().randomDouble(2, 0, 100);
+        fakeData = (float) faker.number().randomDouble(2, 0, 100);
+        break;
       case SINT64:
       case INT64:
       case FIXED64:
       case UINT64:
       case SFIXED64:
-        return (long) faker.number().randomNumber(2, false);
+        fakeData = (long) faker.number().randomNumber(2, false);
+        break;
       case SINT32:
       case FIXED32:
       case INT32:
       case SFIXED32:
       case UINT32:
-        return (int) faker.number().randomDigitNotZero();
+        fakeData = (int) faker.number().randomDigitNotZero();
+        break;
       case BOOL:
-        return faker.bool().bool();
+        fakeData = faker.bool().bool();
+        break;
       case STRING:
         // Use Java Faker or similar to generate a random string
-        return faker.funnyName().name();
+        fakeData = faker.funnyName().name();
+        break;
       case ENUM:
         List<Descriptors.EnumValueDescriptor> values = field.getEnumType().getValues();
         int randomIndex = faker.number().numberBetween(0, values.size() - 1);
-        return values.get(randomIndex);
+        fakeData = values.get(randomIndex);
+        break;
       case BYTES:
-        return ByteString.copyFromUtf8(faker.shakespeare().hamletQuote());
+        fakeData = ByteString.copyFromUtf8(faker.shakespeare().hamletQuote());
+        break;
       case MESSAGE:
-        var thingy = (Class<T>) builder.getField(field).getClass();
-        return fake(thingy);
+        var subProtoFaker = new ProtoFaker<>((Class<T>) builder.getField(field).getClass());
+        fakeData = subProtoFaker.fake();
+        break;
       default:
-        return null;
+        fakeData = null;
     }
+
+    return fakeData;
   }
 
   private T.Builder getBuilder(Class<T> clazz) {
@@ -126,7 +180,7 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
 
     try {
       Method newBuilderMethod = clazz.getDeclaredMethod("newBuilder");
-      builder = (GeneratedMessageV3.Builder) newBuilderMethod.invoke(null);
+      builder = (T.Builder) newBuilderMethod.invoke(null);
     } catch (NoSuchMethodException e) {
       throw new RuntimeException("No newBuilder method found", e);
     } catch (IllegalAccessException e) {

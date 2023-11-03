@@ -7,10 +7,10 @@ import spock.lang.Specification
 class ProtoFakerSpec extends Specification {
     def "fake returns full proto"() {
         given:
-        var protoFaker = new ProtoFaker<TestOuterClass.Test>()
+        var protoFaker = new ProtoFaker<TestOuterClass.Test>(TestOuterClass.Test.class)
 
         when:
-        var result = protoFaker.fake(TestOuterClass.Test.class)
+        TestOuterClass.Test result = protoFaker.fake() as TestOuterClass.Test
 
         then:
         result.getStringValue() instanceof String
@@ -44,5 +44,46 @@ class ProtoFakerSpec extends Specification {
         result.getBytesValue() instanceof ByteString
         result.getBytesValue().size() > 0
         result.getNestedMessage() instanceof TestOuterClass.NestedMessage
+        result.getNestedMessage().getStringValue() instanceof String
+        !result.getNestedMessage().getStringValue().isEmpty()
+    }
+
+    def "fake with baseProto"() {
+        given:
+        var baseProto = TestOuterClass.Test.newBuilder().setStringValue("Provided String").build()
+        var protoFaker = new ProtoFaker<TestOuterClass.Test>(TestOuterClass.Test.class)
+
+        when:
+        var result = protoFaker.fake(baseProto) as TestOuterClass.Test
+
+        then:
+        result.getStringValue() == "Provided String"
+        !result.getNestedMessage().getStringValue().isEmpty()
+    }
+
+    def "fakes with int count"() {
+        given:
+        var protoFaker = new ProtoFaker<>(TestOuterClass.Test.class)
+
+        when:
+        var result = protoFaker.fakes(5)
+
+        then:
+        result.size() == 5
+        !result.get(1).getStringValue().isEmpty()
+    }
+
+    def "fakes with default and count"() {
+        given:
+        var baseProto = TestOuterClass.Test.newBuilder().setInt32Value(1234).build()
+        var protoFaker = new ProtoFaker<>(TestOuterClass.Test.class)
+
+        when:
+        var result = protoFaker.fakes(baseProto, 5)
+
+        then:
+        result.size() == 5
+        result.forEach(r -> r.getInt32Value() == 1234)
+        result.forEach(r -> !r.getStringValue().isEmpty())
     }
 }
