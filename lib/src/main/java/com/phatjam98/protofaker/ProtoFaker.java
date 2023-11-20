@@ -49,10 +49,18 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
         return faker.number().randomDouble(2, 0, 100);
       case FLOAT:
         return (float) faker.number().randomDouble(2, 0, 100);
-      case INT64, UINT64, FIXED64, SFIXED64, SINT64:
-        return (long) faker.number().randomNumber();
-      case INT32, UINT32, FIXED32, SFIXED32, SINT32:
-        return (int) faker.number().randomDigit();
+      case SINT64:
+      case INT64:
+      case FIXED64:
+      case UINT64:
+      case SFIXED64:
+        return (long) faker.number().randomNumber(2, false);
+      case SINT32:
+      case FIXED32:
+      case INT32:
+      case SFIXED32:
+      case UINT32:
+        return (int) faker.number().randomDigitNotZero();
       case BOOL:
         return faker.bool().bool();
       case STRING:
