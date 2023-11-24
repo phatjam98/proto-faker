@@ -22,15 +22,34 @@ jobs:
         with:
           java-version: 11
           distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Build with Gradle
-        uses: gradle/gradle-build-action@v2.9.0
-        with:
-          arguments: build
+        run: ./gradlew assemble
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: build
-          path: build/libs
+      - name: Run Tests
+        run: ./gradlew test
 
+      - name: Checkstyle
+        run: ./gradlew checkstyleMain checkstyleTest
 
+      - name: Jacoco Test Coverage Verification
+        run: ./gradlew jacocoTestReport jacocoTestCoverageVerification
+
+      - name: Publish to Maven Central
+        if: github.event_name == 'release' && github.event.action == 'created'
+        run: ./gradlew publish
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}
+          GPG_SECRET_KEYS: ${{ secrets.GPG_SECRET_KEYS }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
