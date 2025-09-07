@@ -1,0 +1,190 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+
+plugins {
+    // Apply the groovy plugin to also add support for Groovy (needed for Spock)
+    id 'groovy'
+    // Apply the java-library plugin for API and implementation separation.
+    id 'java-library'
+    id "com.google.protobuf" version "0.9.4"
+    id "jacoco"
+    id "checkstyle"
+    id "maven-publish"
+    id 'org.jreleaser' version '1.15.0'
+}
+
+group = 'com.phatjam98'
+version = '0.0.1-SNAPSHOT'
+
+// Set the base name for all archives (JARs) to proto-faker
+archivesBaseName = 'proto-faker'
+
+// Apply a specific Java toolchain to ease working on different environments.
+java {
+    withJavadocJar()
+    withSourcesJar()
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
+jreleaser {
+    configFile = file('jreleaser.yml')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'proto-faker'
+            from components.java
+            versionMapping {
+                usage('java-api') {
+                    fromResolutionOf('runtimeClasspath')
+                }
+                usage('java-runtime') {
+                    fromResolutionResult()
+                }
+            }
+            pom {
+                name = "${project.group}:${project.archivesBaseName}"
+                description = 'A library for generating fake data from protobuf schemas.'
+                url = 'https://github.com/phatjam98/proto-faker'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'phatjam'
+                        name = 'Travis Carter'
+                        email = 'phatjam98@gmail.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/phatjam98/proto-faker.git'
+                    developerConnection = 'scm:git:ssh://github.com/phatjam98/proto-faker.git'
+                    url = 'https://github.com/phatjam98/proto-faker'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'staging'
+            url = layout.buildDirectory.dir("staging-deploy")
+        }
+    }
+}
+
+tasks.named('jreleaserFullRelease') {
+    dependsOn 'publishMavenJavaPublicationToStagingRepository'
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+}
+
+dependencies {
+    api("com.github.javafaker:javafaker:1.0.2")
+    api("com.google.protobuf:protobuf-java:3.24.4")
+
+    implementation("org.slf4j:slf4j-api:2.0.7")
+    implementation("ch.qos.logback:logback-classic:1.4.8")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.14.2")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.14.2")
+
+    implementation platform('org.apache.groovy:groovy-bom:4.0.15')
+    implementation 'org.apache.groovy:groovy'
+    testImplementation platform("org.spockframework:spock-bom:2.3-groovy-4.0")
+    testImplementation "org.spockframework:spock-core"
+    testRuntimeOnly 'net.bytebuddy:byte-buddy:1.14.8'
+    testRuntimeOnly "org.objenesis:objenesis:3.3"
+}
+
+testing {
+    suites {
+        // Configure the built-in test suite
+        test {
+            // Use Spock test framework
+            useSpock('2.2-groovy-3.0')
+        }
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.24.4"
+    }
+}
+
+jacoco {
+    toolVersion = jacocoVersion
+}
+
+jacocoTestReport {
+    dependsOn test
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                    'com/google/protobuf/*'
+            ])
+        }))
+    }
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events TestLogEvent.FAILED,
+                TestLogEvent.PASSED,
+                TestLogEvent.SKIPPED,
+                TestLogEvent.STANDARD_OUT
+        exceptionFormat = TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        outputs.upToDateWhen { false }
+        showStandardStreams = true
+
+        debug {
+            events TestLogEvent.STARTED,
+                    TestLogEvent.FAILED,
+                    TestLogEvent.PASSED,
+                    TestLogEvent.SKIPPED,
+                    TestLogEvent.STANDARD_ERROR,
+                    TestLogEvent.STANDARD_OUT
+            exceptionFormat TestExceptionFormat.FULL
+        }
+
+        info.events = debug.events
+        info.exceptionFormat = debug.exceptionFormat
+
+        afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)"
+                def startItem = '|  ', endItem = '  |'
+                def repeatLength = startItem.length() + output.length() + endItem.length()
+                println('\n' + ('-' * repeatLength) + '\n' + startItem + output + endItem + '\n' + ('-' * repeatLength))
+            }
+        }
+    }
+    finalizedBy jacocoTestReport
+}
+
+System.setProperty("org.checkstyle.google.suppressionfilter.config", project.projectDir.toString() + "/config/checkstyle/checkstyle-suppressions.xml")
+checkstyle {
+    toolVersion = "9.0"
+    config = resources.text.fromFile("config/checkstyle/google-java-format.xml")
+    ignoreFailures = true
+    maxErrors = 0
+    maxWarnings = 0
+}

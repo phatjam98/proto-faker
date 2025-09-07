@@ -49,3 +49,18 @@ enum TestEnum {
   TEST_ENUM_1 = 1;
   TEST_ENUM_2 = 2;
 }
+
+message UserProfile {
+  string email = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string phone_number = 4;
+  string street_address = 5;
+  string city = 6;
+  string state = 7;
+  string zip_code = 8;
+  string company_name = 9;
+  string job_title = 10;
+  string user_id = 11;
+  string description = 12;
+}
