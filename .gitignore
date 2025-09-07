@@ -5,3 +5,66 @@
 build
 
 .idea/
+
+# JReleaser
+out/
+lib/build/staging-deploy/
+
+# macOS
+.DS_Store
+
+# Environment Variables and Credentials
+# =====================================
+# Local environment files (never commit actual credentials)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+
+# Credential backup files
+credentials/
+secrets/
+*.key
+*.pem
+
+# GPG Keys and Signatures
+# =======================
+# GPG key files
+*.gpg
+*.asc
+keyring/
+gnupg/
+.gnupg/
+
+# Security and Certificate Files
+# ==============================
+# Certificate files
+*.crt
+*.cer
+*.p12
+*.jks
+*.keystore
+*.truststore
+
+# SSH Keys
+id_rsa*
+id_ecdsa*
+id_ed25519*
+*.pub
+
+# Temporary Security Files
+# ========================
+# Password files
+passwords.txt
+secrets.txt
+*.password
+*.secret
+*.token
+
+# Backup files that might contain sensitive data
+*.bak
+*.backup
+*.old
+*~

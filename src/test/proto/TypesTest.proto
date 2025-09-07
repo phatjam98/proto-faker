@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option java_package = "com.phatjam98.protofaker.test";
+
+message TypesTest {
+  string first_name = 1;
+  string last_name = 2;
+  int32 age = 3;
+  bool is_active = 4;
+  int64 created_at = 5;
+  double weight = 6;
+  float height = 7;
+  string address = 8;
+  string quote = 9;
+
+  message NestedTypesTest {
+    string alias_name = 1;
+    string alt_quote = 2;
+    string alt_address = 3;
+    double net_worth = 4;
+  }
+}
