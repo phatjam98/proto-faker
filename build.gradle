@@ -14,7 +14,8 @@ plugins {
 }
 
 group = 'com.phatjam98'
-version = '0.0.1-SNAPSHOT'
+// Version is defined in gradle.properties and can be overridden by JReleaser
+// For tag-based releases, JReleaser will set projectVersion from git tags
 
 // Set the base name for all archives (JARs) to proto-faker
 archivesBaseName = 'proto-faker'
