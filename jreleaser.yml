@@ -86,11 +86,8 @@ deploy:
         snapshotSupported: true
         closeRepository: true
         releaseRepository: true
-        connectTimeout: 20
-        readTimeout: 60
-        checksums: true
-        sourceJar: true
-        javadocJar: true
+        stagingRepositories:
+          - build/staging-deploy
 
 files:
   artifacts:
