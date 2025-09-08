@@ -80,8 +80,8 @@ deploy:
         active: SNAPSHOT
         url: https://central.sonatype.com/service/local
         snapshotUrl: https://central.sonatype.com/repository/maven-snapshots/
-        username: '{{Env.JRELEASER_MAVENCENTRAL_USERNAME}}'
-        password: '{{Env.JRELEASER_MAVENCENTRAL_PASSWORD}}'
+        stagingRepositories:
+          - build/staging-deploy
         applyMavenCentralRules: true
         snapshotSupported: true
         closeRepository: true
