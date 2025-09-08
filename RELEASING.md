@@ -123,15 +123,31 @@ git push origin main
 
 ### 6. SNAPSHOT Releases (Development)
 
-For SNAPSHOT versions, you can publish to the staging repository without full release:
+SNAPSHOT versions are automatically handled differently by JReleaser:
 
+**Automated SNAPSHOT Publishing** (via GitHub Actions):
+- SNAPSHOT versions automatically deploy to Maven Central's snapshot repository
+- No GitHub releases are created for SNAPSHOT versions
+- Triggered automatically on pushes to `main` branch when version contains `-SNAPSHOT`
+
+**Manual SNAPSHOT Publishing**:
 ```bash
-# Publish SNAPSHOT to local staging (for testing)
-./gradlew publishMavenJavaPublicationToStagingRepository
+# Load environment variables
+source .env.local
 
-# Check staged artifacts
+# For SNAPSHOT versions, this will:
+# 1. Stage artifacts to build/staging-deploy/
+# 2. Deploy to Maven Central snapshot repository (https://central.sonatype.com/repository/maven-snapshots/)
+# 3. Skip GitHub release creation
+./gradlew jreleaserFullRelease
+
+# Check staged artifacts locally
 ls -la build/staging-deploy/com/phatjam98/proto-faker/
 ```
+
+**SNAPSHOT Repository Configuration**:
+- **Release versions** → `https://central.sonatype.com/api/v1/publisher` (Maven Central Portal)
+- **SNAPSHOT versions** → `https://central.sonatype.com/repository/maven-snapshots/` (Maven Central Snapshots)
 
 ## Release Verification
 
@@ -256,13 +272,44 @@ JRELEASER_GPG_SECRET_KEY=dummy \
 - JReleaser Discussions: https://github.com/jreleaser/jreleaser/discussions
 - Maven Central Support: central-support@sonatype.com
 
+## Deployment Configuration Details
+
+**JReleaser Configuration** (`jreleaser.yml`):
+- **Release Deploy**: `mavenCentral.release-deploy` handles production releases to Maven Central Portal
+- **SNAPSHOT Deploy**: `nexus2.snapshot-deploy` handles SNAPSHOT versions to Maven Central snapshots repository  
+- **Conditional Processing**: JReleaser automatically routes based on version (SNAPSHOT vs release)
+- **GitHub Releases**: Automatically skipped for SNAPSHOT versions using `skipRelease: '{{isSnapshot}}'`
+
+**Repository Routing**:
+```yaml
+# Production releases (e.g., 0.0.1)
+mavenCentral.release-deploy.url: https://central.sonatype.com/api/v1/publisher
+
+# SNAPSHOT releases (e.g., 0.0.1-SNAPSHOT)  
+nexus2.snapshot-deploy.snapshotUrl: https://central.sonatype.com/repository/maven-snapshots/
+```
+
 ## GitHub Actions Automation
 
-The project includes automated CI/CD via `.github/workflows/cicd.yml` that:
+The project includes automated CI/CD via multiple workflows:
 
-- ✅ Runs tests on every push/PR to `master` branch
+**1. CI Workflow** (`.github/workflows/ci.yml`):
+- ✅ Runs tests on every push/PR to `main` branch
 - ✅ Performs code quality checks (Checkstyle, Jacoco coverage)
-- ⚠️ Currently uses legacy OSSRH publishing (needs JReleaser integration)
+- ✅ Validates code without publishing
+
+**2. SNAPSHOT Release Workflow** (`.github/workflows/snapshot.yml`):
+- ✅ Automatically triggered on pushes to `main` branch
+- ✅ Only processes versions containing `-SNAPSHOT`
+- ✅ Publishes to Maven Central snapshots repository
+- ✅ Skips GitHub release creation
+- ✅ Uses JReleaser with proper SNAPSHOT routing
+
+**3. Production Release Workflow** (`.github/workflows/release.yml`):
+- ✅ Triggered on version tags (e.g., `v0.0.1`)  
+- ✅ Creates GitHub releases with changelogs
+- ✅ Publishes to Maven Central Portal
+- ✅ Handles full release process
 
 ### Current CI/CD Workflow
 
