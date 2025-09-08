@@ -54,7 +54,7 @@ jobs:
           ./gradlew jacocoTestReport jacocoTestCoverageVerification
 
       - name: Stage artifacts to Maven Central Portal
-        run: ./gradlew publishMavenJavaPublicationToStagingRepository
+        run: ./gradlew publishMavenJavaPublicationToStagingRepository -Pversion=${{ steps.version.outputs.version }}
         env:
           JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.JRELEASER_MAVENCENTRAL_USERNAME }}
           JRELEASER_MAVENCENTRAL_PASSWORD: ${{ secrets.JRELEASER_MAVENCENTRAL_PASSWORD }}
@@ -62,7 +62,7 @@ jobs:
           JRELEASER_NEXUS2_PASSWORD: ${{ secrets.JRELEASER_NEXUS2_PASSWORD }}
 
       - name: Create GitHub Release with JReleaser
-        run: ./gradlew jreleaserFullRelease
+        run: ./gradlew jreleaserFullRelease -Pversion=${{ steps.version.outputs.version }}
         env:
           JRELEASER_GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
           JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.JRELEASER_MAVENCENTRAL_USERNAME }}
