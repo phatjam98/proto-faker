@@ -23,17 +23,22 @@
 <dependency>
     <groupId>com.phatjam98</groupId>
     <artifactId>proto-faker</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0</version>
     <scope>test</scope>
 </dependency>
 ```
 
 ### Gradle
 ```groovy
-testImplementation 'com.phatjam98:proto-faker:0.0.1-SNAPSHOT'
+testImplementation 'com.phatjam98:proto-faker:0.1.0'
 ```
 
-> **Note**: Currently in pre-release. Artifacts will be available on Maven Central after the first official release.
+### Gradle (Kotlin DSL)
+```kotlin
+testImplementation("com.phatjam98:proto-faker:0.1.0")
+```
+
+✅ **Now available on Maven Central!** Get started with the official 0.1.0 release.
 
 ## 📖 Usage
 
