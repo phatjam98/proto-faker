@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ProtoFaker is a Java library for generating fake data for Protocol Buffer messages. It's designed for testing purposes and uses the Java Faker library to generate realistic fake data for all protobuf field types.
+ProtoFaker is an actively maintained open source Java library for generating fake data for Protocol Buffer messages. It's designed for testing purposes and uses the Java Faker library to generate realistic fake data for all protobuf field types.
+
+**Maven Central**: Available at `com.phatjam98:proto-faker:0.1.0`
+**GitHub**: https://github.com/phatjam98/proto-faker
+**Status**: Production-ready with automated CI/CD and releases
 
 ## Key Commands
 
@@ -40,27 +44,88 @@ ProtoFaker is a Java library for generating fake data for Protocol Buffer messag
 
 ### Publishing
 
-#### JReleaser + Maven Publish Workflow
+#### Production Releases (Tag-Based Versioning)
+ProtoFaker uses automated GitHub Actions workflows for releases. The process is fully automated via git tags:
+
 ```bash
-# Build and stage artifacts locally (required for JReleaser)
-./gradlew publishMavenJavaPublicationToStagingRepository
+# Create and push a version tag (triggers automated release)
+git tag v0.2.0
+git push origin v0.2.0
 
-# Test JReleaser configuration
-./gradlew jreleaserConfig
-
-# Test release with dry run
-./gradlew jreleaserRelease --dryrun
-
-# Full release (GitHub + Maven Central)
-./gradlew jreleaserFullRelease
+# GitHub Actions automatically:
+# 1. Builds and tests the project
+# 2. Publishes to Maven Central Portal
+# 3. Creates GitHub release with changelog
+# 4. Signs artifacts with GPG key 0BF66CC2B921A8AA
 ```
 
-**Important**: The `maven-publish` plugin IS required for JReleaser to work. It stages artifacts in `build/staging-deploy/` which JReleaser then publishes to Maven Central.
+**Version Resolution**: JReleaser uses `-Pversion=X.Y.Z` parameter, where GitHub Actions extracts `X.Y.Z` from git tag `vX.Y.Z`.
+
+#### Manual Release Commands (Local Testing)
+```bash
+# Build and stage artifacts locally with specific version
+./gradlew publishMavenJavaPublicationToStagingRepository -Pversion=0.2.0
+
+# Test JReleaser configuration with version
+./gradlew jreleaserConfig -Pversion=0.2.0
+
+# Test release with dry run
+./gradlew jreleaserRelease --dryrun -Pversion=0.2.0
+
+# Full release (GitHub + Maven Central) - normally done by CI/CD
+./gradlew jreleaserFullRelease -Pversion=0.2.0
+```
+
+**Important**: The `maven-publish` plugin IS required for JReleaser to work. It stages artifacts in `build/staging-deploy/` which JReleaser then publishes to Maven Central Portal.
+
+#### SNAPSHOT Publishing
+SNAPSHOT versions are automatically published to Maven Central from the `main` branch:
+```bash
+# Automatic on every push to main
+# Version format: X.Y.Z-SNAPSHOT (e.g., 0.2.0-SNAPSHOT)
+```
 
 #### Development Publishing
 ```bash
 # Publish to local Maven repository for testing
 ./gradlew publishToMavenLocal
+```
+
+## Using ProtoFaker
+
+### Maven Central Dependency
+Add ProtoFaker to your project:
+
+**Gradle:**
+```gradle
+dependencies {
+    testImplementation 'com.phatjam98:proto-faker:0.1.0'
+}
+```
+
+**Maven:**
+```xml
+<dependency>
+    <groupId>com.phatjam98</groupId>
+    <artifactId>proto-faker</artifactId>
+    <version>0.1.0</version>
+    <scope>test</scope>
+</dependency>
+```
+
+### Basic Usage
+```java
+import com.phatjam98.protofaker.ProtoFaker;
+
+// Generate a single fake message
+MyProto fakeMessage = ProtoFaker.fake(MyProto.class);
+
+// Generate multiple fake messages
+List<MyProto> fakeMessages = ProtoFaker.fakes(MyProto.class, 10);
+
+// Generate with a template
+MyProto template = MyProto.newBuilder().setName("Fixed Name").build();
+MyProto fakeWithTemplate = ProtoFaker.fake(template);
 ```
 
 ## Architecture
@@ -137,13 +202,15 @@ JRELEASER_GPG_SECRET_KEY="$(gpg --armor --export-secret-keys 0BF66CC2B921A8AA)"
 **Security Note**: Never commit actual credential values. Use `.env.local` for local development.
 
 ### Current Release Status
-- ✅ JReleaser fully integrated and tested
+- ✅ **v0.1.0 Successfully Released**: First production release published to Maven Central
+- ✅ JReleaser fully operational with tag-based versioning
 - ✅ Maven-publish plugin configured for artifact staging
 - ✅ GPG key 0BF66CC2B921A8AA configured and tested
 - ✅ GitHub token configured and validated
-- ✅ Maven Central Portal credentials configured
-- ✅ Complete release workflow tested with dry-run
-- ✅ Ready for SNAPSHOT releases
+- ✅ Maven Central Portal credentials configured and working
+- ✅ Complete CI/CD pipeline operational (ci.yml, snapshot.yml, release.yml)
+- ✅ SNAPSHOT and release workflows both tested and working
+- ✅ Library available for consumption via Maven Central
 
 ### GitHub Actions CI/CD
 Project includes automated CI/CD workflows:
@@ -156,3 +223,46 @@ Required GitHub Secrets:
 - `MAVEN_PASSWORD`: Maven Central token password
 - `GPG_PRIVATE_KEY`: Base64-encoded GPG private key
 - `GPG_PASSPHRASE`: GPG key passphrase
+
+### Version Management & Release Process
+
+#### Creating New Releases
+1. **Update version in build.gradle.kts** if needed (for SNAPSHOT development)
+2. **Ensure all tests pass**: `./gradlew test`
+3. **Verify quality checks**: `./gradlew checkstyleMain checkstyleTest jacocoTestReport`
+4. **Create and push version tag**:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+5. **Monitor GitHub Actions** for automated release process
+6. **Verify release** on Maven Central and GitHub Releases
+
+#### Version Numbering Strategy
+- **Production releases**: Semantic versioning (v0.1.0, v0.2.0, etc.)
+- **SNAPSHOT releases**: Automatic from main branch (0.2.0-SNAPSHOT)
+- **Version extraction**: GitHub Actions extracts version from tag (v0.1.0 → 0.1.0)
+
+### Lessons Learned from v0.1.0 Release
+
+#### What Works Well
+- **Tag-based versioning**: Simple and reliable release process
+- **JReleaser + Maven Central Portal**: Modern alternative to legacy OSSRH
+- **GPG signing**: Seamless with configured key 0BF66CC2B921A8AA
+- **GitHub Actions workflows**: Fully automated CI/CD pipeline
+- **Version parameter resolution**: `-Pversion=X.Y.Z` works consistently
+
+#### Key Technical Details
+- **Maven Central Portal**: Uses `mavenCentral` deployer, not legacy OSSRH
+- **Artifact staging**: `maven-publish` plugin required for JReleaser
+- **SNAPSHOT routing**: Automatically publishes to Maven Central SNAPSHOT repository
+- **Release routing**: Production releases go to Maven Central staging → release
+- **GPG key management**: RSA 4096-bit key without passphrase for automation
+
+#### Development Best Practices
+- Always make sure we are on a clean branch off of main before we make changes
+- NEVER commit to main or push directly to main
+- When changes are considered for merge, create a PR for review
+- Test releases locally with `--dryrun` flag before pushing tags
+- Monitor GitHub Actions workflows for any failures
+- Verify artifacts are correctly signed and published to Maven Central
