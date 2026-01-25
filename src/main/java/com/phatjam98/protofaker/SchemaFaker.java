@@ -109,6 +109,11 @@ public class SchemaFaker {
     Map<String, Object> result = new HashMap<>();
 
     for (FieldDefinition field : fields) {
+      // Skip non-required fields with ~30% probability
+      if (!field.isRequired() && ThreadLocalRandom.current().nextDouble() < 0.3) {
+        continue;
+      }
+
       Object value = generateFieldValue(field, injectAnomaly);
       if (value != null) {
         result.put(field.getName(), value);
@@ -257,7 +262,7 @@ public class SchemaFaker {
       }
     }
 
-    return (float) faker.number().randomDouble(2, (long) min, (long) max);
+    return (float) ThreadLocalRandom.current().nextDouble(min, max);
   }
 
   private Double generateDouble(Constraints constraints) {
@@ -273,7 +278,7 @@ public class SchemaFaker {
       }
     }
 
-    return faker.number().randomDouble(2, (long) min, (long) max);
+    return ThreadLocalRandom.current().nextDouble(min, max);
   }
 
   private Long generateTimestamp() {

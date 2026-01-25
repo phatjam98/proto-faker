@@ -2,6 +2,7 @@ package com.phatjam98.protofaker;
 
 import com.phatjam98.protofaker.model.Constraints;
 import com.phatjam98.protofaker.model.FieldType;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -50,7 +51,7 @@ public class AnomalyInjector {
       return (int) (constraints.getMax() * 10);
     }
     if (constraints != null && constraints.getMin() != null) {
-      return (int) (constraints.getMin() - constraints.getMin() * 10);
+      return (int) (constraints.getMin() - Math.abs(constraints.getMin()) * 10 - 1);
     }
     return Integer.MAX_VALUE / 2;
   }
@@ -60,7 +61,7 @@ public class AnomalyInjector {
       return (long) (constraints.getMax() * 10);
     }
     if (constraints != null && constraints.getMin() != null) {
-      return (long) (constraints.getMin() - constraints.getMin() * 10);
+      return (long) (constraints.getMin() - Math.abs(constraints.getMin()) * 10 - 1);
     }
     return Long.MAX_VALUE / 2;
   }
@@ -102,7 +103,7 @@ public class AnomalyInjector {
       case 2:
         byte[] randomBytes = new byte[50];
         ThreadLocalRandom.current().nextBytes(randomBytes);
-        return new String(randomBytes);
+        return new String(randomBytes, StandardCharsets.ISO_8859_1);
       default:
         return "";
     }

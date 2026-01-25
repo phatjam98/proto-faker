@@ -159,7 +159,7 @@ class SchemaFakerSpec extends Specification {
         result.containsKey("active")
     }
 
-    def "fakes generates multiple payloads"() {
+    def "fakes generate multiple payloads"() {
         given:
         def fields = [
             FieldDefinition.builder().name("id").type(FieldType.STRING).required(true).build()

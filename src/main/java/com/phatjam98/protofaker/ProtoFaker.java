@@ -193,15 +193,27 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
 
     // Collect oneof fields that have been set
     Set<Descriptors.FieldDescriptor> oneofSelectedFields = new HashSet<>();
-    Map<Descriptors.OneofDescriptor, Descriptors.FieldDescriptor> oneofSelections = new HashMap<>();
 
-    // Pre-select one field for each oneof group
+    // Pre-select one field for each oneof group, honoring any field overrides
     for (Descriptors.OneofDescriptor oneof : descriptor.getOneofs()) {
       List<Descriptors.FieldDescriptor> oneofFields = oneof.getFields();
       if (!oneofFields.isEmpty()) {
-        int randomIndex = faker.number().numberBetween(0, oneofFields.size());
-        Descriptors.FieldDescriptor selected = oneofFields.get(randomIndex);
-        oneofSelections.put(oneof, selected);
+        Descriptors.FieldDescriptor selected = null;
+
+        // Check if any field in this oneof group has an override configured
+        for (Descriptors.FieldDescriptor field : oneofFields) {
+          if (fieldOverrides.containsKey(field.getName())) {
+            selected = field;
+            break;
+          }
+        }
+
+        // If no override, select randomly
+        if (selected == null) {
+          int randomIndex = faker.number().numberBetween(0, oneofFields.size());
+          selected = oneofFields.get(randomIndex);
+        }
+
         oneofSelectedFields.add(selected);
       }
     }
