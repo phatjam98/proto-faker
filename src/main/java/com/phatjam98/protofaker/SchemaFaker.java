@@ -60,6 +60,15 @@ public class SchemaFaker {
    * @return This SchemaFaker instance for method chaining
    */
   public SchemaFaker withRepeatedCount(String fieldName, int min, int max) {
+    if (min < 0) {
+      throw new IllegalArgumentException(
+          "Minimum repeated count must be non-negative for field '" + fieldName + "': min=" + min);
+    }
+    if (max < min) {
+      throw new IllegalArgumentException(
+          "Maximum repeated count must be greater than or equal to minimum for field '"
+              + fieldName + "': min=" + min + ", max=" + max);
+    }
     repeatedCounts.put(fieldName, new int[] {min, max});
     return this;
   }
@@ -83,7 +92,17 @@ public class SchemaFaker {
    * @return This SchemaFaker instance for method chaining
    */
   public SchemaFaker withAnomalyMode(double anomalyPercentage) {
-    this.anomalyPercentage = anomalyPercentage;
+    if (Double.isNaN(anomalyPercentage) || Double.isInfinite(anomalyPercentage)) {
+      throw new IllegalArgumentException(
+          "anomalyPercentage must be a finite number between 0 and 100");
+    }
+    double clamped = anomalyPercentage;
+    if (clamped < 0.0) {
+      clamped = 0.0;
+    } else if (clamped > 100.0) {
+      clamped = 100.0;
+    }
+    this.anomalyPercentage = clamped;
     return this;
   }
 
@@ -230,7 +249,11 @@ public class SchemaFaker {
       }
     }
 
-    return faker.number().numberBetween(min, max);
+    if (min == max) {
+      return min;
+    }
+    int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+    return faker.number().numberBetween(min, upperBound);
   }
 
   private Long generateLong(Constraints constraints) {
@@ -246,7 +269,11 @@ public class SchemaFaker {
       }
     }
 
-    return faker.number().numberBetween(min, max);
+    if (min == max) {
+      return min;
+    }
+    long upperBound = max < Long.MAX_VALUE ? max + 1 : max;
+    return faker.number().numberBetween(min, upperBound);
   }
 
   private Float generateFloat(Constraints constraints) {

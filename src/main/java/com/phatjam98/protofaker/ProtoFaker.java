@@ -177,8 +177,13 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     Descriptors.Descriptor descriptor = getDescriptorForClass(messageClass);
     GeneratedMessageV3.Builder<?> builder = getBuilderForClass(messageClass);
 
-    if (descriptor == null || builder == null) {
-      return null;
+    if (descriptor == null) {
+      throw new IllegalStateException(
+          "Failed to obtain descriptor for message class: " + messageClass.getName());
+    }
+    if (builder == null) {
+      throw new IllegalStateException(
+          "Failed to obtain builder for message class: " + messageClass.getName());
     }
 
     String typeName = descriptor.getFullName();
@@ -242,7 +247,13 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
           min = counts[0];
           max = counts[1];
         }
-        int count = faker.number().numberBetween(min, max);
+        int count;
+        if (min == max) {
+          count = min;
+        } else {
+          int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+          count = faker.number().numberBetween(min, upperBound);
+        }
         for (int i = 0; i < count; i++) {
           Object fakeData = getFakeDataForField(field, currentAncestors, depth);
           if (fakeData != null) {
@@ -323,7 +334,7 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
         List<Descriptors.EnumValueDescriptor> values = field.getEnumType().getValues();
         int startIndex =
             (values.size() > 1 && values.get(0).getName().contains("UNKNOWN")) ? 1 : 0;
-        int randomIndex = faker.number().numberBetween(startIndex, values.size() - 1);
+        int randomIndex = faker.number().numberBetween(startIndex, values.size());
         fakeData = values.get(randomIndex);
         break;
       case BYTES:
@@ -349,11 +360,9 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     String outerClassName = field.getFile().getOptions().getJavaOuterClassname();
     if (outerClassName.isEmpty()) {
       String fileName = field.getFile().getName();
-      outerClassName =
+      String baseName =
           fileName.substring(fileName.lastIndexOf("/") + 1, fileName.lastIndexOf(".proto"));
-      outerClassName =
-          Character.toUpperCase(outerClassName.charAt(0)) + outerClassName.substring(1)
-              + "OuterClass";
+      outerClassName = underscoreToCamelCase(baseName) + "OuterClass";
     }
 
     String fullClassName =
@@ -390,6 +399,26 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
       LOGGER.error("Error getting descriptor for class {}", clazz.getName(), e);
       return null;
     }
+  }
+
+  /**
+   * Convert underscore-separated name to CamelCase (matching protoc's default behavior).
+   * Example: foo_bar -> FooBar
+   */
+  private String underscoreToCamelCase(String name) {
+    StringBuilder result = new StringBuilder();
+    boolean capitalizeNext = true;
+    for (char c : name.toCharArray()) {
+      if (c == '_') {
+        capitalizeNext = true;
+      } else if (capitalizeNext) {
+        result.append(Character.toUpperCase(c));
+        capitalizeNext = false;
+      } else {
+        result.append(c);
+      }
+    }
+    return result.toString();
   }
 
   /** Generate contextual string data based on field name patterns. */
