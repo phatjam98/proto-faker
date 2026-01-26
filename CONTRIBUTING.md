@@ -324,9 +324,18 @@ git push origin v0.2.0
 proto-faker/
 ├── src/
 │   ├── main/java/com/phatjam98/protofaker/
-│   │   └── ProtoFaker.java           # Core library class
+│   │   ├── ProtoFaker.java           # Core library class for protobuf messages
+│   │   ├── SchemaFaker.java          # Dynamic schema-based fake data generation
+│   │   ├── AnomalyInjector.java      # Anomaly/edge case value generation
+│   │   ├── FieldGenerator.java       # Custom field generation interface
+│   │   └── model/
+│   │       ├── FieldDefinition.java  # Schema field definition
+│   │       ├── FieldType.java        # Supported field types enum
+│   │       └── Constraints.java      # Value constraints for generation
 │   └── test/groovy/com/phatjam98/protofaker/
-│       ├── ProtoFakerSpec.groovy     # Main test specification
+│       ├── ProtoFakerSpec.groovy     # ProtoFaker test specification
+│       ├── SchemaFakerSpec.groovy    # SchemaFaker test specification
+│       ├── AnomalyInjectorSpec.groovy # AnomalyInjector tests
 │       └── proto/                    # Test protobuf definitions
 ├── config/checkstyle/                # Code style configuration
 ├── .github/workflows/                # CI/CD workflows
@@ -339,9 +348,15 @@ proto-faker/
 ### Key Components
 
 **Core Classes:**
-- `ProtoFaker<T>` - Main API class for generating fake protobuf data
-- Field resolution logic via reflection
-- Template-based generation support
+- `ProtoFaker<T>` - Main API class for generating fake protobuf data with compiled classes
+- `SchemaFaker` - Dynamic schema-based generation without proto compilation
+- `AnomalyInjector` - Generates anomalous values for edge case testing
+- `FieldGenerator` - Functional interface for custom field generation logic
+
+**Model Classes:**
+- `FieldDefinition` - Schema field definition with name, type, constraints
+- `FieldType` - Enum of supported types (STRING, INTEGER, ARRAY, OBJECT, etc.)
+- `Constraints` - Value constraints (min, max, maxLength, etc.)
 
 **Test Infrastructure:**
 - Spock specifications for comprehensive testing
@@ -354,6 +369,48 @@ proto-faker/
 - Quality gates and automation
 
 ## Common Development Tasks
+
+### Testing Your Changes in Dependent Projects
+
+**Recommended: SNAPSHOT Publishing**
+
+Instead of using `publishToMavenLocal`, merge your changes to `main` and use the automatically published SNAPSHOT version:
+
+1. Create a PR with your changes
+2. Once merged to `main`, CI/CD publishes `0.2.0-SNAPSHOT` to Maven Central
+3. In your dependent project, add the SNAPSHOT repository:
+
+```groovy
+// build.gradle
+repositories {
+    mavenCentral()
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
+}
+dependencies {
+    testImplementation 'com.phatjam98:proto-faker:0.2.0-SNAPSHOT'
+}
+```
+
+**Why SNAPSHOT over mavenLocal?**
+- No manual publishing steps
+- Consistent with what other users will see
+- Avoids local cache issues
+- Automatically available to all collaborators
+
+**Local Testing (Pre-PR only)**
+
+For quick iteration before creating a PR:
+```bash
+./gradlew publishToMavenLocal
+```
+
+Then in your dependent project:
+```groovy
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+```
 
 ### Adding New Field Types
 

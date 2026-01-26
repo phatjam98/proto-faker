@@ -4,12 +4,19 @@ This document provides comprehensive technical documentation for the ProtoFaker 
 
 ## Table of Contents
 
-- [Class Overview](#class-overview)
-- [Constructor](#constructor)
-- [Configuration Methods](#configuration-methods)
-- [Data Generation Methods](#data-generation-methods)
-- [Field Name Recognition Patterns](#field-name-recognition-patterns)
-- [Supported Protobuf Field Types](#supported-protobuf-field-types)
+- [ProtoFaker](#class-overview) - Generate fake data for compiled protobuf messages
+  - [Constructor](#constructor)
+  - [Configuration Methods](#configuration-methods)
+  - [Data Generation Methods](#data-generation-methods)
+  - [Field Name Recognition Patterns](#field-name-recognition-patterns)
+  - [Supported Protobuf Field Types](#supported-protobuf-field-types)
+- [SchemaFaker](#schemafaker) - Generate fake data from dynamic schemas (New in v0.2.0)
+- [AnomalyInjector](#anomalyinjector) - Generate anomalous test data (New in v0.2.0)
+- [FieldGenerator](#fieldgenerator) - Custom field generation interface (New in v0.2.0)
+- [Model Classes](#model-classes) - Schema definition classes (New in v0.2.0)
+  - [FieldDefinition](#fielddefinition)
+  - [FieldType](#fieldtype)
+  - [Constraints](#constraints)
 - [Code Examples](#code-examples)
 - [Error Handling](#error-handling)
 - [Performance Considerations](#performance-considerations)
@@ -128,6 +135,58 @@ var exactFaker = new ProtoFaker<>(UserProto.class)
 // Generate many items (stress testing)
 var stressFaker = new ProtoFaker<>(ProductProto.class)
     .withRepeatedCount(10, 20);
+```
+
+### withRepeatedCount(String fieldName, int minCount, int maxCount) *(New in v0.2.0)*
+
+Set the count range for a specific repeated field.
+
+**Parameters:**
+- `fieldName` - Name of the specific repeated field
+- `minCount` - Minimum number of items for this field (inclusive, must be >= 0)
+- `maxCount` - Maximum number of items for this field (inclusive, must be >= minCount)
+
+**Returns:** `ProtoFaker<T>` - The same instance for method chaining
+
+**Throws:** `IllegalArgumentException` if minCount < 0 or maxCount < minCount
+
+**Examples:**
+```java
+// Different counts for different fields
+var faker = new ProtoFaker<>(OrderProto.class)
+    .withRepeatedCount("line_items", 1, 10)    // 1-10 line items
+    .withRepeatedCount("tags", 0, 3)           // 0-3 tags
+    .withRepeatedCount("discounts", 0, 1);     // 0-1 discounts
+
+// Override global setting for specific field
+var customFaker = new ProtoFaker<>(UserProto.class)
+    .withRepeatedCount(1, 5)                   // Default: 1-5 items
+    .withRepeatedCount("permissions", 3, 8);   // Permissions: 3-8 items
+```
+
+### withMaxDepth(int maxDepth) *(New in v0.2.0)*
+
+Set the maximum recursion depth for self-referencing messages.
+
+**Parameters:**
+- `maxDepth` - Maximum depth to recurse into nested messages (default: 5)
+
+**Returns:** `ProtoFaker<T>` - The same instance for method chaining
+
+**Behavior:**
+- Prevents infinite recursion when a message contains fields of its own type
+- When maxDepth is reached, nested message fields are left empty
+- Counts depth from the root message (root = depth 0)
+
+**Examples:**
+```java
+// Shallow generation for tree structures
+var shallowFaker = new ProtoFaker<>(TreeNodeProto.class)
+    .withMaxDepth(2);  // Only 2 levels of nesting
+
+// Deep generation for complex hierarchies
+var deepFaker = new ProtoFaker<>(OrganizationProto.class)
+    .withMaxDepth(10);  // Up to 10 levels
 ```
 
 ## Data Generation Methods
@@ -420,7 +479,7 @@ ProtoFaker automatically generates contextually appropriate data based on field 
 ```
 
 #### Repeated Fields
-- **Count**: Configurable via `withRepeatedCount(min, max)`
+- **Count**: Configurable via `withRepeatedCount(min, max)` or `withRepeatedCount(fieldName, min, max)`
 - **Default Range**: 1 to 5 items
 - **Independence**: Each repeated item is independently generated
 - **Override Behavior**: `withField()` adds a single item to repeated fields
@@ -428,6 +487,31 @@ ProtoFaker automatically generates contextually appropriate data based on field 
 ```java
 // repeated string tags -> ["tag1", "tag2", "tag3"] (count varies)
 // repeated UserProto users -> [UserProto{...}, UserProto{...}] (each unique)
+```
+
+#### Map Fields *(New in v0.2.0)*
+- **Behavior**: Generates map entries with fake keys and values
+- **Count**: Configurable via `withRepeatedCount(fieldName, min, max)`
+- **Key Generation**: Keys are generated based on the map key type (string, int, etc.)
+- **Value Generation**: Values are generated based on the map value type (can be messages)
+
+```java
+// map<string, int32> scores -> {"player_1": 100, "player_2": 85}
+// map<string, UserProto> users -> {"user-abc": UserProto{...}, "user-xyz": UserProto{...}}
+```
+
+#### Oneof Fields *(New in v0.2.0)*
+- **Selection**: Randomly selects exactly one field from each oneof group
+- **Override Priority**: If any field in a oneof group has `withField()` override, that field is selected
+- **Behavior**: Non-selected oneof fields are left unset
+
+```java
+// For oneof contact { string email = 1; string phone = 2; }
+// Result: Either email OR phone will be set, never both
+
+// With override:
+var faker = new ProtoFaker<>(ContactProto.class)
+    .withField("email", "forced@example.com");  // email will always be selected
 ```
 
 ### Type Compatibility Matrix
@@ -451,6 +535,370 @@ ProtoFaker automatically generates contextually appropriate data based on field 
 | `bytes` | `ByteString` | `faker.shakespeare().hamletQuote()` | Shakespeare quote |
 | `enum` | `EnumValueDescriptor` | Random enum selection | `Status.ACTIVE` |
 | `message` | Nested message class | Recursive generation | Complete nested object |
+
+---
+
+## SchemaFaker
+
+*(New in v0.2.0)*
+
+### Overview
+
+SchemaFaker generates fake data payloads from dynamic schema definitions without requiring compiled protobuf classes. Instead of producing typed protobuf messages, it produces `Map<String, Object>` payloads.
+
+**Package:** `com.phatjam98.protofaker`
+
+**Use Cases:**
+- Testing systems that process JSON/Map-based payloads
+- Dynamic schema validation testing
+- Anomaly detection system testing
+- Integration testing without proto compilation
+
+### Constructor
+
+```java
+SchemaFaker schemaFaker = new SchemaFaker();
+```
+
+Creates a new SchemaFaker instance with default settings.
+
+### Configuration Methods
+
+#### withField(String fieldName, Object value)
+
+Override the value for a specific field.
+
+```java
+schemaFaker.withField("email", "test@example.com")
+           .withField("status", "ACTIVE");
+```
+
+#### withRepeatedCount(String fieldName, int min, int max)
+
+Set the count range for a specific array/repeated field.
+
+**Throws:** `IllegalArgumentException` if min < 0 or max < min
+
+```java
+schemaFaker.withRepeatedCount("items", 2, 5)    // 2-5 items
+           .withRepeatedCount("tags", 0, 3);     // 0-3 tags
+```
+
+#### withGenerator(String fieldName, FieldGenerator generator)
+
+Set a custom generator for a specific field.
+
+```java
+schemaFaker.withGenerator("transaction_id", (name, type, constraints) ->
+    "TXN-" + UUID.randomUUID().toString());
+```
+
+#### withAnomalyMode(double anomalyPercentage)
+
+Enable anomaly injection mode. Values outside 0-100 are clamped.
+
+**Throws:** `IllegalArgumentException` if anomalyPercentage is NaN or Infinite
+
+```java
+schemaFaker.withAnomalyMode(10.0);  // 10% of objects contain anomalies
+```
+
+#### withConstraints(boolean respectConstraints)
+
+Toggle whether constraints are enforced during generation.
+
+```java
+schemaFaker.withConstraints(false);  // Ignore all constraints
+```
+
+### Data Generation Methods
+
+#### fake(List\<FieldDefinition\> fields)
+
+Generate a single fake payload.
+
+```java
+List<FieldDefinition> schema = Arrays.asList(
+    FieldDefinition.builder().name("email").type(FieldType.STRING).required(true).build(),
+    FieldDefinition.builder().name("age").type(FieldType.INTEGER)
+        .constraints(Constraints.builder().min(18.0).max(100.0).build()).build()
+);
+
+Map<String, Object> payload = schemaFaker.fake(schema);
+// Result: {"email": "john.doe@example.com", "age": 42}
+```
+
+#### fakes(List\<FieldDefinition\> fields, int count)
+
+Generate multiple fake payloads.
+
+```java
+List<Map<String, Object>> payloads = schemaFaker.fakes(schema, 100);
+```
+
+### Supported Field Types
+
+| FieldType | Generated Value | Notes |
+|-----------|----------------|-------|
+| `STRING` | Context-aware string | Uses same patterns as ProtoFaker |
+| `INTEGER` | Random int | Respects min/max constraints |
+| `LONG` | Random long | Respects min/max constraints |
+| `FLOAT` | Random float | Respects min/max constraints |
+| `DOUBLE` | Random double | Respects min/max constraints |
+| `BOOLEAN` | Random boolean | - |
+| `TIMESTAMP` | Epoch milliseconds | Within last 30 days |
+| `ARRAY` | List of values | Uses children definitions |
+| `OBJECT` | Nested Map | Uses children definitions |
+| `MAP` | Key-value Map | Uses first child as value type |
+
+---
+
+## AnomalyInjector
+
+*(New in v0.2.0)*
+
+### Overview
+
+AnomalyInjector generates anomalous values outside normal constraints for testing edge cases, boundary conditions, and anomaly detection systems.
+
+**Package:** `com.phatjam98.protofaker`
+
+**Use Cases:**
+- Testing input validation
+- Training anomaly detection models
+- Stress testing data pipelines
+- Edge case discovery
+
+### Method
+
+#### generateAnomaly(FieldType type, Constraints constraints)
+
+Generate an anomalous value for the given field type and constraints.
+
+```java
+AnomalyInjector injector = new AnomalyInjector();
+
+// Generate anomalous integer (10x max constraint)
+Constraints intConstraints = Constraints.builder().min(0.0).max(100.0).build();
+Integer anomaly = (Integer) injector.generateAnomaly(FieldType.INTEGER, intConstraints);
+// Result: 1000 (10x the max)
+```
+
+### Anomaly Strategies by Type
+
+| Type | Strategy | Examples |
+|------|----------|----------|
+| `INTEGER` | 10x max, or far below min | max=100 → 1000 |
+| `LONG` | 10x max, or far below min | max=1000 → 10000 |
+| `FLOAT` | 10 std deviations from range | range 0-100 → ~550 |
+| `DOUBLE` | 10 std deviations from range | range 0-100 → ~550 |
+| `STRING` | Empty, 3x maxLength, or random bytes | "" or "xxx...xxx" (1000 chars) |
+| `TIMESTAMP` | Epoch zero or year 2099 | 0 or 4070908800000 |
+| `ARRAY` | Empty or 100 items | [] or ["item_0", ..., "item_99"] |
+
+---
+
+## FieldGenerator
+
+*(New in v0.2.0)*
+
+### Overview
+
+A functional interface for custom field value generation. Allows plugging in custom generation logic for specific fields.
+
+**Package:** `com.phatjam98.protofaker`
+
+### Interface Definition
+
+```java
+@FunctionalInterface
+public interface FieldGenerator {
+    /**
+     * Generate a value for the given field.
+     *
+     * @param fieldName The name of the field being generated
+     * @param type The declared type of the field
+     * @param constraints The constraints defined for the field (may be null)
+     * @return The generated value
+     */
+    Object generate(String fieldName, FieldType type, Constraints constraints);
+}
+```
+
+### Usage Examples
+
+```java
+// UUID generator
+FieldGenerator uuidGenerator = (name, type, constraints) -> UUID.randomUUID().toString();
+
+// Sequential ID generator
+AtomicInteger counter = new AtomicInteger(1000);
+FieldGenerator seqGenerator = (name, type, constraints) -> counter.incrementAndGet();
+
+// Constrained random generator
+FieldGenerator constrainedGenerator = (name, type, constraints) -> {
+    if (constraints != null && constraints.getMin() != null && constraints.getMax() != null) {
+        return ThreadLocalRandom.current().nextInt(
+            constraints.getMin().intValue(),
+            constraints.getMax().intValue() + 1
+        );
+    }
+    return ThreadLocalRandom.current().nextInt(1, 1000);
+};
+
+// Using with SchemaFaker
+SchemaFaker schemaFaker = new SchemaFaker()
+    .withGenerator("order_id", uuidGenerator)
+    .withGenerator("sequence_number", seqGenerator)
+    .withGenerator("priority", constrainedGenerator);
+```
+
+---
+
+## Model Classes
+
+*(New in v0.2.0)*
+
+### FieldDefinition
+
+Immutable definition of a schema field for dynamic fake data generation.
+
+**Package:** `com.phatjam98.protofaker.model`
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `String` | Field name (required) |
+| `type` | `FieldType` | Field type (required) |
+| `required` | `boolean` | Whether field is required (default: false) |
+| `constraints` | `Constraints` | Value constraints (optional) |
+| `children` | `List<FieldDefinition>` | Child fields for OBJECT/ARRAY types |
+
+#### Builder Pattern
+
+```java
+// Simple field
+FieldDefinition email = FieldDefinition.builder()
+    .name("email")
+    .type(FieldType.STRING)
+    .required(true)
+    .build();
+
+// Field with constraints
+FieldDefinition age = FieldDefinition.builder()
+    .name("age")
+    .type(FieldType.INTEGER)
+    .constraints(Constraints.builder().min(0.0).max(120.0).build())
+    .build();
+
+// Nested object
+FieldDefinition address = FieldDefinition.builder()
+    .name("address")
+    .type(FieldType.OBJECT)
+    .children(Arrays.asList(
+        FieldDefinition.builder().name("street").type(FieldType.STRING).build(),
+        FieldDefinition.builder().name("city").type(FieldType.STRING).build(),
+        FieldDefinition.builder().name("zip").type(FieldType.STRING).build()
+    ))
+    .build();
+
+// Array of objects
+FieldDefinition items = FieldDefinition.builder()
+    .name("items")
+    .type(FieldType.ARRAY)
+    .constraints(Constraints.builder().minRepeated(1).maxRepeated(10).build())
+    .children(Arrays.asList(
+        FieldDefinition.builder().name("name").type(FieldType.STRING).build(),
+        FieldDefinition.builder().name("price").type(FieldType.DOUBLE).build()
+    ))
+    .build();
+```
+
+### FieldType
+
+Enum of supported field types for dynamic schema-based fake data generation.
+
+**Package:** `com.phatjam98.protofaker.model`
+
+#### Values
+
+| Value | Description | Java Type |
+|-------|-------------|-----------|
+| `STRING` | Text values | `String` |
+| `INTEGER` | 32-bit integers | `Integer` |
+| `LONG` | 64-bit integers | `Long` |
+| `FLOAT` | 32-bit floating point | `Float` |
+| `DOUBLE` | 64-bit floating point | `Double` |
+| `BOOLEAN` | True/false values | `Boolean` |
+| `TIMESTAMP` | Epoch milliseconds | `Long` |
+| `ARRAY` | List of values | `List<Object>` |
+| `OBJECT` | Nested structure | `Map<String, Object>` |
+| `MAP` | Key-value pairs | `Map<String, Object>` |
+
+### Constraints
+
+Value constraints for generation. All properties are optional.
+
+**Package:** `com.phatjam98.protofaker.model`
+
+#### Properties
+
+| Property | Type | Description | Validation |
+|----------|------|-------------|------------|
+| `min` | `Double` | Minimum numeric value | Must be <= max |
+| `max` | `Double` | Maximum numeric value | Must be >= min |
+| `pattern` | `String` | Regex pattern (reserved) | - |
+| `maxLength` | `Integer` | Maximum string length | Must be >= 0 |
+| `minRepeated` | `Integer` | Minimum array/map size | Must be >= 0, <= maxRepeated |
+| `maxRepeated` | `Integer` | Maximum array/map size | Must be >= 0, >= minRepeated |
+
+#### Builder Pattern
+
+```java
+// Numeric range
+Constraints ageConstraints = Constraints.builder()
+    .min(0.0)
+    .max(120.0)
+    .build();
+
+// String length
+Constraints nameConstraints = Constraints.builder()
+    .maxLength(100)
+    .build();
+
+// Array size
+Constraints itemsConstraints = Constraints.builder()
+    .minRepeated(1)
+    .maxRepeated(50)
+    .build();
+
+// Combined constraints
+Constraints complexConstraints = Constraints.builder()
+    .min(0.0)
+    .max(1000.0)
+    .maxLength(255)
+    .minRepeated(0)
+    .maxRepeated(10)
+    .build();
+```
+
+#### Validation
+
+Constraints are validated on `build()`:
+
+```java
+// This throws IllegalArgumentException: min > max
+Constraints.builder().min(100.0).max(50.0).build();
+
+// This throws IllegalArgumentException: maxLength < 0
+Constraints.builder().maxLength(-1).build();
+
+// This throws IllegalArgumentException: minRepeated > maxRepeated
+Constraints.builder().minRepeated(10).maxRepeated(5).build();
+```
+
+---
 
 ## Code Examples
 
@@ -844,4 +1292,6 @@ void testWithMockedService() {
 
 ---
 
-**Note:** This API reference covers ProtoFaker version 0.1.0. For the latest updates and additional features, check the [CHANGELOG](../CHANGELOG.md) and [project repository](https://github.com/phatjam98/proto-faker).
+**Note:** This API reference covers ProtoFaker version 0.2.0-SNAPSHOT. For the latest updates and additional features, check the [CHANGELOG](../CHANGELOG.md) and [project repository](https://github.com/phatjam98/proto-faker).
+
+**Stable Version:** The latest stable release is 0.1.0. New features documented as "New in v0.2.0" are available in SNAPSHOT builds.

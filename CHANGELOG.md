@@ -137,7 +137,78 @@ None reported for this release.
 
 ---
 
-## Unreleased
+## [Unreleased] - v0.2.0
+
+### Added
+
+#### SchemaFaker - Dynamic Schema-Based Generation
+A new class for generating fake data payloads from dynamic schema definitions without requiring compiled protobuf classes. Produces `Map<String, Object>` payloads.
+
+- **Core Methods:**
+  - `fake(List<FieldDefinition> fields)` - Generate a single fake payload
+  - `fakes(List<FieldDefinition> fields, int count)` - Generate multiple fake payloads
+- **Configuration Methods:**
+  - `withField(String fieldName, Object value)` - Override specific field values
+  - `withRepeatedCount(String fieldName, int min, int max)` - Control array/repeated field sizes
+  - `withGenerator(String fieldName, FieldGenerator generator)` - Custom field generation logic
+  - `withAnomalyMode(double percentage)` - Enable anomaly injection (0-100%)
+  - `withConstraints(boolean respectConstraints)` - Toggle constraint enforcement
+
+#### AnomalyInjector - Edge Case Test Data Generation
+Generates anomalous values outside normal constraints for testing edge cases and boundary conditions.
+
+- **Anomaly Strategies:**
+  - Integer/Long: Values 10x beyond max constraint, or well below min
+  - Float/Double: Values 10 standard deviations from expected range
+  - String: Empty strings, very long strings (3x max length), or strings with random bytes
+  - Timestamp: Epoch zero (1970-01-01) or far future (2099)
+  - Array: Empty arrays or unusually large arrays (100 items)
+
+#### FieldGenerator Interface
+Functional interface for custom per-field generation logic:
+```java
+@FunctionalInterface
+public interface FieldGenerator {
+    Object generate(String fieldName, FieldType type, Constraints constraints);
+}
+```
+
+#### Model Classes
+- **FieldDefinition**: Immutable schema field definition
+  - Properties: `name`, `type`, `required`, `constraints`, `children`
+  - Builder pattern: `FieldDefinition.builder().name("email").type(FieldType.STRING).build()`
+- **FieldType**: Enum of supported types
+  - Values: `STRING`, `INTEGER`, `LONG`, `FLOAT`, `DOUBLE`, `BOOLEAN`, `TIMESTAMP`, `ARRAY`, `OBJECT`, `MAP`
+- **Constraints**: Value constraints for generation
+  - Properties: `min`, `max`, `pattern`, `maxLength`, `minRepeated`, `maxRepeated`
+  - Validation on build: min <= max, lengths >= 0
+
+#### ProtoFaker Enhancements
+- **Map Field Support**: Properly generates protobuf map fields with configurable entry counts
+- **Oneof Field Handling**: Randomly selects one field per oneof group; field overrides take priority
+- **Cycle Detection**: `withMaxDepth(int maxDepth)` prevents infinite recursion in self-referencing messages (default: 5)
+- **Per-Field Repeated Counts**: `withRepeatedCount(String fieldName, int min, int max)` for fine-grained control
+- **Input Validation**: Validates min/max constraints with descriptive error messages
+- **Outer Class Name Resolution**: Handles underscore-to-CamelCase conversion for proto file names (e.g., `foo_bar.proto` → `FooBarOuterClass`)
+
+### Changed
+
+- Internal refactoring for better separation of concerns
+- Improved error messages with field context
+
+### Fixed
+
+- Fixed handling of nested messages in complex proto hierarchies
+- Fixed repeated field count edge cases when min equals max
+
+### Development
+
+#### SNAPSHOT Publishing Workflow
+- Automated SNAPSHOT publishing from `main` branch to Maven Central
+- SNAPSHOT repository: `https://central.sonatype.com/repository/maven-snapshots/`
+- Recommended for testing integration changes before production releases
+
+---
 
 ### Development Notes
 
