@@ -85,9 +85,43 @@ SNAPSHOT versions are automatically published to Maven Central from the `main` b
 # Version format: X.Y.Z-SNAPSHOT (e.g., 0.2.0-SNAPSHOT)
 ```
 
-#### Development Publishing
+#### Development Publishing (SNAPSHOT Workflow)
+
+**Recommended**: Use automated SNAPSHOT publishing instead of local Maven publishing.
+
+When your PR is merged to `main`, the CI/CD pipeline automatically publishes a SNAPSHOT version to Maven Central. Dependent projects can then test against your changes by adding the SNAPSHOT repository:
+
+**Gradle:**
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
+}
+dependencies {
+    testImplementation 'com.phatjam98:proto-faker:0.2.0-SNAPSHOT'
+}
+```
+
+**Maven:**
+```xml
+<repositories>
+    <repository>
+        <id>maven-snapshots</id>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+</repositories>
+<dependency>
+    <groupId>com.phatjam98</groupId>
+    <artifactId>proto-faker</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <scope>test</scope>
+</dependency>
+```
+
+**Local Publishing (Not Recommended)**:
+Only use `publishToMavenLocal` when you need to test changes before creating a PR:
 ```bash
-# Publish to local Maven repository for testing
 ./gradlew publishToMavenLocal
 ```
 
@@ -128,19 +162,74 @@ MyProto template = MyProto.newBuilder().setName("Fixed Name").build();
 MyProto fakeWithTemplate = ProtoFaker.fake(template);
 ```
 
+## New in v0.2.0-SNAPSHOT
+
+### SchemaFaker
+Dynamic schema-based fake data generation without requiring compiled protobuf classes. Generates `Map<String, Object>` payloads from field definitions.
+
+```java
+import com.phatjam98.protofaker.SchemaFaker;
+import com.phatjam98.protofaker.model.*;
+
+List<FieldDefinition> schema = Arrays.asList(
+    FieldDefinition.builder().name("email").type(FieldType.STRING).required(true).build(),
+    FieldDefinition.builder().name("age").type(FieldType.INTEGER)
+        .constraints(Constraints.builder().min(18.0).max(100.0).build()).build()
+);
+
+SchemaFaker schemaFaker = new SchemaFaker();
+Map<String, Object> payload = schemaFaker.fake(schema);
+```
+
+### AnomalyInjector
+Anomaly injection mode for generating out-of-bounds test data. Enable via `withAnomalyMode(percentage)`:
+
+```java
+SchemaFaker schemaFaker = new SchemaFaker()
+    .withAnomalyMode(10.0);  // 10% of generated objects contain anomalies
+```
+
+Anomalies include: values exceeding constraints, empty strings, very long strings, extreme timestamps, empty/large arrays.
+
+### FieldGenerator Interface
+Custom per-field generation logic:
+
+```java
+schemaFaker.withGenerator("transaction_id", (name, type, constraints) ->
+    "TXN-" + UUID.randomUUID().toString());
+```
+
+### ProtoFaker Enhancements
+- **Map field support**: Properly generates protobuf map fields
+- **Oneof field handling**: Randomly selects one field per oneof group, honors overrides
+- **Cycle detection**: `withMaxDepth(int)` to prevent infinite recursion in self-referencing messages
+- **Per-field repeated counts**: `withRepeatedCount(String fieldName, int min, int max)`
+- **Input validation**: Validates min/max constraints on repeated counts
+- **Outer class name resolution**: Handles underscore-to-CamelCase conversion for proto files
+
 ## Architecture
 
 ### Core Components
-- **ProtoFaker<T>**: Generic class that generates fake data for any protobuf message type
+- **ProtoFaker<T>**: Generic class that generates fake data for any compiled protobuf message type
+- **SchemaFaker**: Dynamic schema-based generator for `Map<String, Object>` payloads
+- **AnomalyInjector**: Generates anomalous values outside normal constraints for testing edge cases
+- **FieldGenerator**: Functional interface for custom field generation logic
 - **Reflection-based approach**: Uses protobuf descriptors to introspect message structure
-- **Field type mapping**: Supports all protobuf field types (primitives, enums, bytes, nested messages)
+- **Field type mapping**: Supports all protobuf field types (primitives, enums, bytes, nested messages, maps, oneofs)
+
+### Model Classes
+- **FieldDefinition**: Schema field definition with name, type, required flag, constraints, and children
+- **FieldType**: Enum of supported types (STRING, INTEGER, LONG, FLOAT, DOUBLE, BOOLEAN, TIMESTAMP, ARRAY, OBJECT, MAP)
+- **Constraints**: Value constraints (min, max, pattern, maxLength, minRepeated, maxRepeated)
 
 ### Key Features
 - Generate single fake messages: `fake()`
-- Generate with template: `fake(baseProto)` 
+- Generate with template: `fake(baseProto)`
 - Generate collections: `fakes(count)` or `fakes(baseProtos)`
-- Handles nested messages recursively
+- Handles nested messages recursively with cycle detection
 - Uses Java Faker for realistic data generation
+- Custom field generators for specialized data
+- Anomaly injection for testing edge cases
 
 ### Project Structure
 - Single-module Gradle project

@@ -4,12 +4,15 @@ import com.github.javafaker.Faker;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.GeneratedMessageV3;
+import com.google.protobuf.Message;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,11 +26,15 @@ import org.slf4j.LoggerFactory;
 public class ProtoFaker<T extends GeneratedMessageV3> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ProtoFaker.class);
+  private static final int DEFAULT_MAX_DEPTH = 5;
+
   private final Class<T> clazz;
   private final Faker faker;
   private final Map<String, Object> fieldOverrides;
+  private final Map<String, int[]> perFieldRepeatedCounts;
   private int minRepeatedCount = 1;
   private int maxRepeatedCount = 5;
+  private int maxDepth = DEFAULT_MAX_DEPTH;
 
   /**
    * Create a new ProtoFaker instance.
@@ -38,6 +45,7 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     this.clazz = clazz;
     this.faker = new Faker();
     this.fieldOverrides = new HashMap<>();
+    this.perFieldRepeatedCounts = new HashMap<>();
   }
 
   /**
@@ -53,7 +61,7 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
   }
 
   /**
-   * Set the count range for repeated fields.
+   * Set the global count range for repeated fields.
    *
    * @param minCount Minimum number of items in repeated fields
    * @param maxCount Maximum number of items in repeated fields
@@ -66,47 +74,47 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
   }
 
   /**
+   * Set the count range for a specific repeated field.
+   *
+   * @param fieldName Name of the repeated field
+   * @param minCount Minimum number of items
+   * @param maxCount Maximum number of items
+   * @return This ProtoFaker instance for method chaining
+   */
+  public ProtoFaker<T> withRepeatedCount(String fieldName, int minCount, int maxCount) {
+    if (minCount < 0) {
+      throw new IllegalArgumentException(
+          "Minimum repeated count must be non-negative for field '" + fieldName
+              + "': min=" + minCount);
+    }
+    if (maxCount < minCount) {
+      throw new IllegalArgumentException(
+          "Maximum repeated count must be >= minimum for field '" + fieldName
+              + "': min=" + minCount + ", max=" + maxCount);
+    }
+    perFieldRepeatedCounts.put(fieldName, new int[] {minCount, maxCount});
+    return this;
+  }
+
+  /**
+   * Set the maximum recursion depth for self-referencing messages.
+   *
+   * @param maxDepth Maximum depth (default: 5)
+   * @return This ProtoFaker instance for method chaining
+   */
+  public ProtoFaker<T> withMaxDepth(int maxDepth) {
+    this.maxDepth = maxDepth;
+    return this;
+  }
+
+  /**
    * Create a new fake protobuf message for the given Protobuf Class. This will generate fake data
    * for all fields in the protobuf message.
    *
    * @return Fake protobuf message
    */
   public T fake() {
-    Descriptors.Descriptor descriptor = getDescriptor(clazz);
-    T.Builder builder = getBuilder(clazz);
-
-    if (descriptor != null) {
-      List<Descriptors.FieldDescriptor> fields = descriptor.getFields();
-
-      for (Descriptors.FieldDescriptor field : fields) {
-        // Check if field has an override
-        if (fieldOverrides.containsKey(field.getName())) {
-          Object overrideValue = fieldOverrides.get(field.getName());
-          if (field.isRepeated()) {
-            // For repeated fields, the override should be a single value that we add once
-            builder.addRepeatedField(field, overrideValue);
-          } else {
-            builder.setField(field, overrideValue);
-          }
-        } else if (field.isRepeated()) {
-          // Generate multiple items for repeated fields using configured count range
-          int count = faker.number().numberBetween(minRepeatedCount, maxRepeatedCount);
-          for (int i = 0; i < count; i++) {
-            Object fakeData = getFakeDataForField(field, builder);
-            if (fakeData != null) {
-              builder.addRepeatedField(field, fakeData);
-            }
-          }
-        } else {
-          Object fakeData = getFakeDataForField(field, builder);
-          if (fakeData != null) {
-            builder.setField(field, fakeData);
-          }
-        }
-      }
-    }
-
-    return (T) builder.build();
+    return fakeWithDepthTracking(clazz, new HashSet<>(), 0);
   }
 
   /**
@@ -173,7 +181,148 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     return fakeProtos;
   }
 
-  private Object getFakeDataForField(Descriptors.FieldDescriptor field, T.Builder builder) {
+  @SuppressWarnings("unchecked")
+  private <M extends GeneratedMessageV3> M fakeWithDepthTracking(
+      Class<M> messageClass, Set<String> ancestorTypes, int depth) {
+    Descriptors.Descriptor descriptor = getDescriptorForClass(messageClass);
+    GeneratedMessageV3.Builder<?> builder = getBuilderForClass(messageClass);
+
+    if (descriptor == null) {
+      throw new IllegalStateException(
+          "Failed to obtain descriptor for message class: " + messageClass.getName());
+    }
+    if (builder == null) {
+      throw new IllegalStateException(
+          "Failed to obtain builder for message class: " + messageClass.getName());
+    }
+
+    String typeName = descriptor.getFullName();
+
+    // Cycle detection: if we've seen this type in our ancestor chain, stop
+    if (ancestorTypes.contains(typeName) || depth >= maxDepth) {
+      return (M) builder.build();
+    }
+
+    Set<String> currentAncestors = new HashSet<>(ancestorTypes);
+    currentAncestors.add(typeName);
+
+    // Collect oneof fields that have been set
+    Set<Descriptors.FieldDescriptor> oneofSelectedFields = new HashSet<>();
+
+    // Pre-select one field for each oneof group, honoring any field overrides
+    for (Descriptors.OneofDescriptor oneof : descriptor.getOneofs()) {
+      List<Descriptors.FieldDescriptor> oneofFields = oneof.getFields();
+      if (!oneofFields.isEmpty()) {
+        Descriptors.FieldDescriptor selected = null;
+
+        // Check if any field in this oneof group has an override configured
+        for (Descriptors.FieldDescriptor field : oneofFields) {
+          if (fieldOverrides.containsKey(field.getName())) {
+            selected = field;
+            break;
+          }
+        }
+
+        // If no override, select randomly
+        if (selected == null) {
+          int randomIndex = faker.number().numberBetween(0, oneofFields.size());
+          selected = oneofFields.get(randomIndex);
+        }
+
+        oneofSelectedFields.add(selected);
+      }
+    }
+
+    List<Descriptors.FieldDescriptor> fields = descriptor.getFields();
+    for (Descriptors.FieldDescriptor field : fields) {
+      // Skip oneof fields that weren't selected
+      if (field.getContainingOneof() != null && !oneofSelectedFields.contains(field)) {
+        continue;
+      }
+
+      if (fieldOverrides.containsKey(field.getName())) {
+        Object overrideValue = fieldOverrides.get(field.getName());
+        if (field.isRepeated()) {
+          builder.addRepeatedField(field, overrideValue);
+        } else {
+          builder.setField(field, overrideValue);
+        }
+      } else if (field.isMapField()) {
+        populateMapField(field, builder, currentAncestors, depth);
+      } else if (field.isRepeated()) {
+        int min = minRepeatedCount;
+        int max = maxRepeatedCount;
+        if (perFieldRepeatedCounts.containsKey(field.getName())) {
+          int[] counts = perFieldRepeatedCounts.get(field.getName());
+          min = counts[0];
+          max = counts[1];
+        }
+        int count;
+        if (min == max) {
+          count = min;
+        } else {
+          int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+          count = faker.number().numberBetween(min, upperBound);
+        }
+        for (int i = 0; i < count; i++) {
+          Object fakeData = getFakeDataForField(field, currentAncestors, depth);
+          if (fakeData != null) {
+            builder.addRepeatedField(field, fakeData);
+          }
+        }
+      } else {
+        Object fakeData = getFakeDataForField(field, currentAncestors, depth);
+        if (fakeData != null) {
+          builder.setField(field, fakeData);
+        }
+      }
+    }
+
+    return (M) builder.build();
+  }
+
+  private void populateMapField(
+      Descriptors.FieldDescriptor field,
+      GeneratedMessageV3.Builder<?> builder,
+      Set<String> ancestorTypes,
+      int depth) {
+    Descriptors.Descriptor entryDescriptor = field.getMessageType();
+    Descriptors.FieldDescriptor keyField = entryDescriptor.findFieldByName("key");
+    Descriptors.FieldDescriptor valueField = entryDescriptor.findFieldByName("value");
+
+    int min = minRepeatedCount;
+    int max = maxRepeatedCount;
+    if (perFieldRepeatedCounts.containsKey(field.getName())) {
+      int[] counts = perFieldRepeatedCounts.get(field.getName());
+      min = counts[0];
+      max = counts[1];
+    }
+    int count;
+    if (min == max) {
+      count = min;
+    } else {
+      int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+      count = faker.number().numberBetween(min, upperBound);
+    }
+    for (int i = 0; i < count; i++) {
+      Message.Builder entryBuilder = builder.newBuilderForField(field);
+
+      Object key = getFakeDataForField(keyField, ancestorTypes, depth);
+      if (key != null) {
+        entryBuilder.setField(keyField, key);
+      }
+
+      Object value = getFakeDataForField(valueField, ancestorTypes, depth);
+      if (value != null) {
+        entryBuilder.setField(valueField, value);
+      }
+
+      builder.addRepeatedField(field, entryBuilder.build());
+    }
+  }
+
+  private Object getFakeDataForField(
+      Descriptors.FieldDescriptor field, Set<String> ancestorTypes, int depth) {
     var type = field.getType();
     Object fakeData;
 
@@ -206,44 +355,16 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
         break;
       case ENUM:
         List<Descriptors.EnumValueDescriptor> values = field.getEnumType().getValues();
-        // Skip the first value if it's UNKNOWN (index 0) and we have other values
-        int startIndex = (values.size() > 1 && values.get(0).getName().contains("UNKNOWN")) ? 1 : 0;
-        int randomIndex = faker.number().numberBetween(startIndex, values.size() - 1);
+        int startIndex =
+            (values.size() > 1 && values.get(0).getName().contains("UNKNOWN")) ? 1 : 0;
+        int randomIndex = faker.number().numberBetween(startIndex, values.size());
         fakeData = values.get(randomIndex);
         break;
       case BYTES:
         fakeData = ByteString.copyFromUtf8(faker.shakespeare().hamletQuote());
         break;
       case MESSAGE:
-        // Get the message class from the field descriptor
-        String messageClassName = field.getMessageType().getFullName();
-        try {
-          // Convert protobuf package name to Java package name
-          String javaPackage = field.getFile().getOptions().getJavaPackage();
-          if (javaPackage.isEmpty()) {
-            javaPackage = field.getFile().getPackage();
-          }
-          String outerClassName = field.getFile().getOptions().getJavaOuterClassname();
-          if (outerClassName.isEmpty()) {
-            // Generate outer class name from file name
-            String fileName = field.getFile().getName();
-            outerClassName = fileName.substring(fileName.lastIndexOf("/") + 1, 
-                fileName.lastIndexOf(".proto"));
-            outerClassName = Character.toUpperCase(outerClassName.charAt(0)) 
-                + outerClassName.substring(1) + "OuterClass";
-          }
-          
-          String fullClassName = javaPackage + "." + outerClassName + "$" 
-              + field.getMessageType().getName();
-          Class<?> messageClass = Class.forName(fullClassName);
-          
-          @SuppressWarnings("rawtypes")
-          var subProtoFaker = new ProtoFaker(messageClass);
-          fakeData = subProtoFaker.fake();
-        } catch (ClassNotFoundException e) {
-          LOGGER.error("Could not find message class for field {}", field.getName(), e);
-          fakeData = null;
-        }
+        fakeData = generateNestedMessage(field, ancestorTypes, depth);
         break;
       default:
         fakeData = null;
@@ -252,76 +373,99 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     return fakeData;
   }
 
-  private T.Builder getBuilder(Class<T> clazz) {
-    T.Builder builder = null;
-
-    try {
-      Method newBuilderMethod = clazz.getDeclaredMethod("newBuilder");
-      builder = (T.Builder) newBuilderMethod.invoke(null);
-    } catch (NoSuchMethodException e) {
-      throw new RuntimeException("No newBuilder method found", e);
-    } catch (IllegalAccessException e) {
-      throw new RuntimeException("Cannot access newBuilder method", e);
-    } catch (InvocationTargetException e) {
-      throw new RuntimeException("Error invoking newBuilder method", e);
+  @SuppressWarnings("unchecked")
+  private Object generateNestedMessage(
+      Descriptors.FieldDescriptor field, Set<String> ancestorTypes, int depth) {
+    String javaPackage = field.getFile().getOptions().getJavaPackage();
+    if (javaPackage.isEmpty()) {
+      javaPackage = field.getFile().getPackage();
+    }
+    String outerClassName = field.getFile().getOptions().getJavaOuterClassname();
+    if (outerClassName.isEmpty()) {
+      String fileName = field.getFile().getName();
+      String baseName =
+          fileName.substring(fileName.lastIndexOf("/") + 1, fileName.lastIndexOf(".proto"));
+      outerClassName = underscoreToCamelCase(baseName) + "OuterClass";
     }
 
-    return builder;
+    String fullClassName =
+        javaPackage + "." + outerClassName + "$" + field.getMessageType().getName();
+    try {
+      Class<?> messageClass = Class.forName(fullClassName);
+      return fakeWithDepthTracking(
+          (Class<GeneratedMessageV3>) messageClass, ancestorTypes, depth + 1);
+    } catch (ClassNotFoundException e) {
+      LOGGER.error("Could not find message class for field {}", field.getName(), e);
+      return null;
+    }
   }
 
-  private Descriptors.Descriptor getDescriptor(
-      Class<T> clazz) {
-    Method getDescriptor = null;
-    Descriptors.Descriptor descriptor = null;
-
+  @SuppressWarnings("unchecked")
+  private <M extends GeneratedMessageV3> GeneratedMessageV3.Builder<?> getBuilderForClass(
+      Class<M> clazz) {
     try {
-      getDescriptor = clazz.getMethod("getDescriptor");
-    } catch (NoSuchMethodException e) {
-      LOGGER.error("The method getDescriptor was not found on class {}", clazz.getName(), e);
+      Method newBuilderMethod = clazz.getDeclaredMethod("newBuilder");
+      return (GeneratedMessageV3.Builder<?>) newBuilderMethod.invoke(null);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      LOGGER.error("Error getting builder for class {}", clazz.getName(), e);
+      return null;
     }
+  }
 
-    if (getDescriptor != null) {
-      try {
-        descriptor = (Descriptors.Descriptor) getDescriptor.invoke(null);
-      } catch (IllegalAccessException | InvocationTargetException e) {
-        LOGGER.error("Error occurred trying to invoke getDescriptor method", e);
-      }
+  @SuppressWarnings("unchecked")
+  private <M extends GeneratedMessageV3> Descriptors.Descriptor getDescriptorForClass(
+      Class<M> clazz) {
+    try {
+      Method getDescriptor = clazz.getMethod("getDescriptor");
+      return (Descriptors.Descriptor) getDescriptor.invoke(null);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      LOGGER.error("Error getting descriptor for class {}", clazz.getName(), e);
+      return null;
     }
-
-    return descriptor;
   }
 
   /**
-   * Generate contextual string data based on field name patterns.
+   * Convert underscore-separated name to CamelCase (matching protoc's default behavior).
+   * Example: foo_bar -> FooBar
    */
+  private String underscoreToCamelCase(String name) {
+    StringBuilder result = new StringBuilder();
+    boolean capitalizeNext = true;
+    for (char c : name.toCharArray()) {
+      if (c == '_') {
+        capitalizeNext = true;
+      } else if (capitalizeNext) {
+        result.append(Character.toUpperCase(c));
+        capitalizeNext = false;
+      } else {
+        result.append(c);
+      }
+    }
+    return result.toString();
+  }
+
+  /** Generate contextual string data based on field name patterns. */
   private String generateContextualString(String fieldName) {
     String lowerFieldName = fieldName.toLowerCase();
-    
-    // Email patterns
+
     if (lowerFieldName.contains("email") || lowerFieldName.contains("mail")) {
       return faker.internet().emailAddress();
     }
-    
-    // Name patterns
     if (lowerFieldName.contains("firstname") || lowerFieldName.contains("first_name")) {
       return faker.name().firstName();
     }
     if (lowerFieldName.contains("lastname") || lowerFieldName.contains("last_name")) {
       return faker.name().lastName();
     }
-    if (lowerFieldName.contains("fullname") || lowerFieldName.contains("full_name") 
-        || lowerFieldName.equals("name") || lowerFieldName.contains("username") 
+    if (lowerFieldName.contains("fullname") || lowerFieldName.contains("full_name")
+        || lowerFieldName.equals("name") || lowerFieldName.contains("username")
         || lowerFieldName.contains("displayname") || lowerFieldName.contains("display_name")) {
       return faker.name().fullName();
     }
-    
-    // Phone patterns
-    if (lowerFieldName.contains("phone") || lowerFieldName.contains("mobile") 
+    if (lowerFieldName.contains("phone") || lowerFieldName.contains("mobile")
         || lowerFieldName.contains("tel") || lowerFieldName.contains("number")) {
       return faker.phoneNumber().phoneNumber();
     }
-    
-    // Address patterns
     if (lowerFieldName.contains("address") || lowerFieldName.contains("street")) {
       return faker.address().streetAddress();
     }
@@ -337,41 +481,30 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     if (lowerFieldName.contains("zip") || lowerFieldName.contains("postal")) {
       return faker.address().zipCode();
     }
-    
-    // Internet/Web patterns
     if (lowerFieldName.contains("url") || lowerFieldName.contains("website")) {
       return faker.internet().url();
     }
     if (lowerFieldName.contains("domain")) {
       return faker.internet().domainName();
     }
-    
-    // Company/Business patterns
     if (lowerFieldName.contains("company") || lowerFieldName.contains("organization")) {
       return faker.company().name();
     }
-    if (lowerFieldName.contains("job") || lowerFieldName.contains("position") 
+    if (lowerFieldName.contains("job") || lowerFieldName.contains("position")
         || lowerFieldName.contains("title") || lowerFieldName.contains("role")) {
       return faker.job().title();
     }
-    
-    // ID patterns
     if (lowerFieldName.contains("id") || lowerFieldName.contains("uuid")) {
       return faker.internet().uuid();
     }
-    
-    // Text content patterns
-    if (lowerFieldName.contains("description") || lowerFieldName.contains("comment") 
+    if (lowerFieldName.contains("description") || lowerFieldName.contains("comment")
         || lowerFieldName.contains("note") || lowerFieldName.contains("message")) {
       return faker.lorem().sentence();
     }
-    
-    // Color patterns
     if (lowerFieldName.contains("color") || lowerFieldName.contains("colour")) {
       return faker.color().name();
     }
-    
-    // Default to funny names (original behavior)
+
     return faker.funnyName().name();
   }
 }

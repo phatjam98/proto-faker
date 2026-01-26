@@ -40,6 +40,44 @@ testImplementation("com.phatjam98:proto-faker:0.1.0")
 
 ✅ **Now available on Maven Central!** Get started with the official 0.1.0 release.
 
+### 🔬 SNAPSHOT Builds (Early Access)
+
+For the latest development features (including SchemaFaker, AnomalyInjector, and enhanced ProtoFaker), use SNAPSHOT versions:
+
+**Gradle:**
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
+}
+dependencies {
+    testImplementation 'com.phatjam98:proto-faker:0.2.0-SNAPSHOT'
+}
+```
+
+**Maven:**
+```xml
+<repositories>
+    <repository>
+        <id>maven-snapshots</id>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+</repositories>
+<dependency>
+    <groupId>com.phatjam98</groupId>
+    <artifactId>proto-faker</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <scope>test</scope>
+</dependency>
+```
+
+**Coming in v0.2.0:**
+- 🎯 **SchemaFaker**: Generate fake data from dynamic schemas without compiled protobuf classes
+- 🔥 **Anomaly Injection**: Generate out-of-bounds test data for edge case testing
+- 🔧 **Custom Field Generators**: Plug in your own generation logic per field
+- 🗺️ **Map & Oneof Support**: Full support for protobuf map and oneof fields
+
 ## 📖 Usage
 
 ### Basic Usage

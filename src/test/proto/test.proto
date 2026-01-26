@@ -64,3 +64,41 @@ message UserProfile {
   string user_id = 11;
   string description = 12;
 }
+
+message MapMessage {
+  string id = 1;
+  map<string, string> labels = 2;
+  map<string, int32> scores = 3;
+  map<string, NestedMessage> nested_map = 4;
+}
+
+message OneofMessage {
+  string id = 1;
+  oneof contact {
+    string email = 2;
+    string phone = 3;
+    string address = 4;
+  }
+  oneof value_type {
+    int32 int_value = 5;
+    string string_value = 6;
+    double double_value = 7;
+  }
+}
+
+message SelfReferencing {
+  string name = 1;
+  int32 depth = 2;
+  SelfReferencing child = 3;
+  repeated SelfReferencing children = 4;
+}
+
+message IndirectCycleA {
+  string name = 1;
+  IndirectCycleB ref_b = 2;
+}
+
+message IndirectCycleB {
+  string name = 1;
+  IndirectCycleA ref_a = 2;
+}
