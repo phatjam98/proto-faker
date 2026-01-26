@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ProtoFaker is an actively maintained open source Java library for generating fake data for Protocol Buffer messages. It's designed for testing purposes and uses the Java Faker library to generate realistic fake data for all protobuf field types.
 
-**Maven Central**: Available at `com.phatjam98:proto-faker:0.1.0`
+**Maven Central**: Available at `com.phatjam98:proto-faker:0.2.0`
 **GitHub**: https://github.com/phatjam98/proto-faker
 **Status**: Production-ready with automated CI/CD and releases
 
@@ -49,8 +49,8 @@ ProtoFaker uses automated GitHub Actions workflows for releases. The process is 
 
 ```bash
 # Create and push a version tag (triggers automated release)
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 
 # GitHub Actions automatically:
 # 1. Builds and tests the project
@@ -64,16 +64,16 @@ git push origin v0.2.0
 #### Manual Release Commands (Local Testing)
 ```bash
 # Build and stage artifacts locally with specific version
-./gradlew publishMavenJavaPublicationToStagingRepository -Pversion=0.2.0
+./gradlew publishMavenJavaPublicationToStagingRepository -Pversion=0.3.0
 
 # Test JReleaser configuration with version
-./gradlew jreleaserConfig -Pversion=0.2.0
+./gradlew jreleaserConfig -Pversion=0.3.0
 
 # Test release with dry run
-./gradlew jreleaserRelease --dryrun -Pversion=0.2.0
+./gradlew jreleaserRelease --dryrun -Pversion=0.3.0
 
 # Full release (GitHub + Maven Central) - normally done by CI/CD
-./gradlew jreleaserFullRelease -Pversion=0.2.0
+./gradlew jreleaserFullRelease -Pversion=0.3.0
 ```
 
 **Important**: The `maven-publish` plugin IS required for JReleaser to work. It stages artifacts in `build/staging-deploy/` which JReleaser then publishes to Maven Central Portal.
@@ -82,7 +82,7 @@ git push origin v0.2.0
 SNAPSHOT versions are automatically published to Maven Central from the `main` branch:
 ```bash
 # Automatic on every push to main
-# Version format: X.Y.Z-SNAPSHOT (e.g., 0.2.0-SNAPSHOT)
+# Version format: X.Y.Z-SNAPSHOT (e.g., 0.3.0-SNAPSHOT)
 ```
 
 #### Development Publishing (SNAPSHOT Workflow)
@@ -98,7 +98,7 @@ repositories {
     maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
 }
 dependencies {
-    testImplementation 'com.phatjam98:proto-faker:0.2.0-SNAPSHOT'
+    testImplementation 'com.phatjam98:proto-faker:0.3.0-SNAPSHOT'
 }
 ```
 
@@ -114,7 +114,7 @@ dependencies {
 <dependency>
     <groupId>com.phatjam98</groupId>
     <artifactId>proto-faker</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -133,7 +133,7 @@ Add ProtoFaker to your project:
 **Gradle:**
 ```gradle
 dependencies {
-    testImplementation 'com.phatjam98:proto-faker:0.1.0'
+    testImplementation 'com.phatjam98:proto-faker:0.2.0'
 }
 ```
 
@@ -142,7 +142,7 @@ dependencies {
 <dependency>
     <groupId>com.phatjam98</groupId>
     <artifactId>proto-faker</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -152,54 +152,20 @@ dependencies {
 import com.phatjam98.protofaker.ProtoFaker;
 
 // Generate a single fake message
-MyProto fakeMessage = ProtoFaker.fake(MyProto.class);
+var protoFaker = new ProtoFaker<>(MyProto.class);
+MyProto fakeMessage = protoFaker.fake();
 
 // Generate multiple fake messages
-List<MyProto> fakeMessages = ProtoFaker.fakes(MyProto.class, 10);
+List<MyProto> fakeMessages = protoFaker.fakes(10);
 
 // Generate with a template
 MyProto template = MyProto.newBuilder().setName("Fixed Name").build();
-MyProto fakeWithTemplate = ProtoFaker.fake(template);
+MyProto fakeWithTemplate = protoFaker.fake(template);
 ```
 
-## New in v0.2.0-SNAPSHOT
+## Key Features
 
-### SchemaFaker
-Dynamic schema-based fake data generation without requiring compiled protobuf classes. Generates `Map<String, Object>` payloads from field definitions.
-
-```java
-import com.phatjam98.protofaker.SchemaFaker;
-import com.phatjam98.protofaker.model.*;
-
-List<FieldDefinition> schema = Arrays.asList(
-    FieldDefinition.builder().name("email").type(FieldType.STRING).required(true).build(),
-    FieldDefinition.builder().name("age").type(FieldType.INTEGER)
-        .constraints(Constraints.builder().min(18.0).max(100.0).build()).build()
-);
-
-SchemaFaker schemaFaker = new SchemaFaker();
-Map<String, Object> payload = schemaFaker.fake(schema);
-```
-
-### AnomalyInjector
-Anomaly injection mode for generating out-of-bounds test data. Enable via `withAnomalyMode(percentage)`:
-
-```java
-SchemaFaker schemaFaker = new SchemaFaker()
-    .withAnomalyMode(10.0);  // 10% of generated objects contain anomalies
-```
-
-Anomalies include: values exceeding constraints, empty strings, very long strings, extreme timestamps, empty/large arrays.
-
-### FieldGenerator Interface
-Custom per-field generation logic:
-
-```java
-schemaFaker.withGenerator("transaction_id", (name, type, constraints) ->
-    "TXN-" + UUID.randomUUID().toString());
-```
-
-### ProtoFaker Enhancements
+### ProtoFaker
 - **Map field support**: Properly generates protobuf map fields
 - **Oneof field handling**: Randomly selects one field per oneof group, honors overrides
 - **Cycle detection**: `withMaxDepth(int)` to prevent infinite recursion in self-referencing messages
@@ -211,16 +177,8 @@ schemaFaker.withGenerator("transaction_id", (name, type, constraints) ->
 
 ### Core Components
 - **ProtoFaker<T>**: Generic class that generates fake data for any compiled protobuf message type
-- **SchemaFaker**: Dynamic schema-based generator for `Map<String, Object>` payloads
-- **AnomalyInjector**: Generates anomalous values outside normal constraints for testing edge cases
-- **FieldGenerator**: Functional interface for custom field generation logic
 - **Reflection-based approach**: Uses protobuf descriptors to introspect message structure
 - **Field type mapping**: Supports all protobuf field types (primitives, enums, bytes, nested messages, maps, oneofs)
-
-### Model Classes
-- **FieldDefinition**: Schema field definition with name, type, required flag, constraints, and children
-- **FieldType**: Enum of supported types (STRING, INTEGER, LONG, FLOAT, DOUBLE, BOOLEAN, TIMESTAMP, ARRAY, OBJECT, MAP)
-- **Constraints**: Value constraints (min, max, pattern, maxLength, minRepeated, maxRepeated)
 
 ### Key Features
 - Generate single fake messages: `fake()`
@@ -228,8 +186,6 @@ schemaFaker.withGenerator("transaction_id", (name, type, constraints) ->
 - Generate collections: `fakes(count)` or `fakes(baseProtos)`
 - Handles nested messages recursively with cycle detection
 - Uses Java Faker for realistic data generation
-- Custom field generators for specialized data
-- Anomaly injection for testing edge cases
 
 ### Project Structure
 - Single-module Gradle project
@@ -291,15 +247,17 @@ JRELEASER_GPG_SECRET_KEY="$(gpg --armor --export-secret-keys 0BF66CC2B921A8AA)"
 **Security Note**: Never commit actual credential values. Use `.env.local` for local development.
 
 ### Current Release Status
-- ✅ **v0.1.0 Successfully Released**: First production release published to Maven Central
-- ✅ JReleaser fully operational with tag-based versioning
-- ✅ Maven-publish plugin configured for artifact staging
-- ✅ GPG key 0BF66CC2B921A8AA configured and tested
-- ✅ GitHub token configured and validated
-- ✅ Maven Central Portal credentials configured and working
-- ✅ Complete CI/CD pipeline operational (ci.yml, snapshot.yml, release.yml)
-- ✅ SNAPSHOT and release workflows both tested and working
-- ✅ Library available for consumption via Maven Central
+- v0.1.0 Successfully Released: First production release published to Maven Central
+- v0.2.0: Map, oneof, cycle detection features
+- v0.3.0 (upcoming): Bug fixes, validation improvements, SchemaFaker removed
+- JReleaser fully operational with tag-based versioning
+- Maven-publish plugin configured for artifact staging
+- GPG key 0BF66CC2B921A8AA configured and tested
+- GitHub token configured and validated
+- Maven Central Portal credentials configured and working
+- Complete CI/CD pipeline operational (ci.yml, snapshot.yml, release.yml)
+- SNAPSHOT and release workflows both tested and working
+- Library available for consumption via Maven Central
 
 ### GitHub Actions CI/CD
 Project includes automated CI/CD workflows:
@@ -321,15 +279,15 @@ Required GitHub Secrets:
 3. **Verify quality checks**: `./gradlew checkstyleMain checkstyleTest jacocoTestReport`
 4. **Create and push version tag**:
    ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag v0.3.0
+   git push origin v0.3.0
    ```
 5. **Monitor GitHub Actions** for automated release process
 6. **Verify release** on Maven Central and GitHub Releases
 
 #### Version Numbering Strategy
 - **Production releases**: Semantic versioning (v0.1.0, v0.2.0, etc.)
-- **SNAPSHOT releases**: Automatic from main branch (0.2.0-SNAPSHOT)
+- **SNAPSHOT releases**: Automatic from main branch (0.3.0-SNAPSHOT)
 - **Version extraction**: GitHub Actions extracts version from tag (v0.1.0 → 0.1.0)
 
 ### Lessons Learned from v0.1.0 Release

@@ -66,8 +66,17 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
    * @param minCount Minimum number of items in repeated fields
    * @param maxCount Maximum number of items in repeated fields
    * @return This ProtoFaker instance for method chaining
+   * @throws IllegalArgumentException if minCount is negative or maxCount is less than minCount
    */
   public ProtoFaker<T> withRepeatedCount(int minCount, int maxCount) {
+    if (minCount < 0) {
+      throw new IllegalArgumentException(
+          "Minimum repeated count must be non-negative: min=" + minCount);
+    }
+    if (maxCount < minCount) {
+      throw new IllegalArgumentException(
+          "Maximum repeated count must be >= minimum: min=" + minCount + ", max=" + maxCount);
+    }
     this.minRepeatedCount = minCount;
     this.maxRepeatedCount = maxCount;
     return this;
@@ -355,8 +364,17 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
         break;
       case ENUM:
         List<Descriptors.EnumValueDescriptor> values = field.getEnumType().getValues();
+        if (values.isEmpty()) {
+          LOGGER.warn("Enum {} has no values, skipping", field.getEnumType().getName());
+          fakeData = null;
+          break;
+        }
         int startIndex =
             (values.size() > 1 && values.get(0).getName().contains("UNKNOWN")) ? 1 : 0;
+        // Handle edge case where all values except UNKNOWN are skipped
+        if (startIndex >= values.size()) {
+          startIndex = 0;
+        }
         int randomIndex = faker.number().numberBetween(startIndex, values.size());
         fakeData = values.get(randomIndex);
         break;
