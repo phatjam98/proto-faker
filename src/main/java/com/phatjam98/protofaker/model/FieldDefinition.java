@@ -1,5 +1,7 @@
 package com.phatjam98.protofaker.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -17,7 +19,10 @@ public final class FieldDefinition {
     this.type = Objects.requireNonNull(builder.type, "type must not be null");
     this.required = builder.required;
     this.constraints = builder.constraints;
-    this.children = builder.children;
+    // Defensive copy to ensure immutability
+    this.children = builder.children == null
+        ? null
+        : Collections.unmodifiableList(new ArrayList<>(builder.children));
   }
 
   public String getName() {

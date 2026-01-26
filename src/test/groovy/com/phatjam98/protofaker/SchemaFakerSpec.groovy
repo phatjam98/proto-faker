@@ -128,6 +128,10 @@ class SchemaFakerSpec extends Specification {
                 .required(true)
                 .build()
         ]
+        // Capture time bounds before generating to avoid race condition
+        def toleranceMillis = 1000L
+        def beforeNow = System.currentTimeMillis()
+        def thirtyDaysAgo = beforeNow - (30L * 24 * 60 * 60 * 1000) - toleranceMillis
 
         when:
         def result = schemaFaker.fake(fields)
@@ -135,10 +139,9 @@ class SchemaFakerSpec extends Specification {
         then:
         result.containsKey("created_at")
         result.get("created_at") instanceof Long
-        def now = System.currentTimeMillis()
-        def thirtyDaysAgo = now - (30L * 24 * 60 * 60 * 1000)
+        def afterNow = System.currentTimeMillis() + toleranceMillis
         (Long) result.get("created_at") >= thirtyDaysAgo
-        (Long) result.get("created_at") <= now
+        (Long) result.get("created_at") <= afterNow
     }
 
     def "fake generates multiple fields"() {

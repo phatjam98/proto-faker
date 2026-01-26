@@ -82,6 +82,16 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
    * @return This ProtoFaker instance for method chaining
    */
   public ProtoFaker<T> withRepeatedCount(String fieldName, int minCount, int maxCount) {
+    if (minCount < 0) {
+      throw new IllegalArgumentException(
+          "Minimum repeated count must be non-negative for field '" + fieldName
+              + "': min=" + minCount);
+    }
+    if (maxCount < minCount) {
+      throw new IllegalArgumentException(
+          "Maximum repeated count must be >= minimum for field '" + fieldName
+              + "': min=" + minCount + ", max=" + maxCount);
+    }
     perFieldRepeatedCounts.put(fieldName, new int[] {minCount, maxCount});
     return this;
   }
@@ -280,7 +290,20 @@ public class ProtoFaker<T extends GeneratedMessageV3> {
     Descriptors.FieldDescriptor keyField = entryDescriptor.findFieldByName("key");
     Descriptors.FieldDescriptor valueField = entryDescriptor.findFieldByName("value");
 
-    int count = faker.number().numberBetween(1, 5);
+    int min = minRepeatedCount;
+    int max = maxRepeatedCount;
+    if (perFieldRepeatedCounts.containsKey(field.getName())) {
+      int[] counts = perFieldRepeatedCounts.get(field.getName());
+      min = counts[0];
+      max = counts[1];
+    }
+    int count;
+    if (min == max) {
+      count = min;
+    } else {
+      int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+      count = faker.number().numberBetween(min, upperBound);
+    }
     for (int i = 0; i < count; i++) {
       Message.Builder entryBuilder = builder.newBuilderForField(field);
 

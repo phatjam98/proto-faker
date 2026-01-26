@@ -124,7 +124,34 @@ public final class Constraints {
       return this;
     }
 
+    /**
+     * Build the Constraints instance with validation.
+     *
+     * @return The built Constraints instance
+     * @throws IllegalArgumentException if constraints are invalid
+     */
     public Constraints build() {
+      if (min != null && max != null && min > max) {
+        throw new IllegalArgumentException(
+            "Invalid constraints: min (" + min + ") must be <= max (" + max + ")");
+      }
+      if (maxLength != null && maxLength < 0) {
+        throw new IllegalArgumentException(
+            "Invalid constraints: maxLength (" + maxLength + ") must be >= 0");
+      }
+      if (minRepeated != null && minRepeated < 0) {
+        throw new IllegalArgumentException(
+            "Invalid constraints: minRepeated (" + minRepeated + ") must be >= 0");
+      }
+      if (maxRepeated != null && maxRepeated < 0) {
+        throw new IllegalArgumentException(
+            "Invalid constraints: maxRepeated (" + maxRepeated + ") must be >= 0");
+      }
+      if (minRepeated != null && maxRepeated != null && minRepeated > maxRepeated) {
+        throw new IllegalArgumentException(
+            "Invalid constraints: minRepeated (" + minRepeated
+                + ") must be <= maxRepeated (" + maxRepeated + ")");
+      }
       return new Constraints(this);
     }
   }

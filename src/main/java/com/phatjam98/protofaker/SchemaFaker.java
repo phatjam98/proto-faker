@@ -128,14 +128,19 @@ public class SchemaFaker {
     Map<String, Object> result = new HashMap<>();
 
     for (FieldDefinition field : fields) {
-      // Skip non-required fields with ~30% probability
-      if (!field.isRequired() && ThreadLocalRandom.current().nextDouble() < 0.3) {
+      String fieldName = field.getName();
+
+      // Skip non-required fields with ~30% probability, unless override/generator configured
+      boolean hasOverride = fieldOverrides.containsKey(fieldName);
+      boolean hasGenerator = fieldGenerators.containsKey(fieldName);
+      if (!field.isRequired() && !hasOverride && !hasGenerator
+          && ThreadLocalRandom.current().nextDouble() < 0.3) {
         continue;
       }
 
       Object value = generateFieldValue(field, injectAnomaly);
       if (value != null) {
-        result.put(field.getName(), value);
+        result.put(fieldName, value);
       }
     }
 
@@ -289,6 +294,9 @@ public class SchemaFaker {
       }
     }
 
+    if (min == max) {
+      return (float) min;
+    }
     return (float) ThreadLocalRandom.current().nextDouble(min, max);
   }
 
@@ -305,6 +313,9 @@ public class SchemaFaker {
       }
     }
 
+    if (min == max) {
+      return min;
+    }
     return ThreadLocalRandom.current().nextDouble(min, max);
   }
 
@@ -332,7 +343,21 @@ public class SchemaFaker {
       }
     }
 
-    int count = faker.number().numberBetween(min, max + 1);
+    // Normalize range to avoid invalid arguments
+    if (min < 0) {
+      min = 0;
+    }
+    if (max < min) {
+      max = min;
+    }
+
+    int count;
+    if (min == max) {
+      count = min;
+    } else {
+      int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+      count = faker.number().numberBetween(min, upperBound);
+    }
     List<Object> array = new ArrayList<>();
 
     if (field.getChildren() != null && !field.getChildren().isEmpty()) {
@@ -373,7 +398,29 @@ public class SchemaFaker {
   }
 
   private Map<String, Object> generateMap(FieldDefinition field) {
-    int count = faker.number().numberBetween(1, 5);
+    int min = DEFAULT_MIN_REPEATED;
+    int max = DEFAULT_MAX_REPEATED;
+
+    if (repeatedCounts.containsKey(field.getName())) {
+      int[] counts = repeatedCounts.get(field.getName());
+      min = counts[0];
+      max = counts[1];
+    } else if (respectConstraints && field.getConstraints() != null) {
+      if (field.getConstraints().getMinRepeated() != null) {
+        min = field.getConstraints().getMinRepeated();
+      }
+      if (field.getConstraints().getMaxRepeated() != null) {
+        max = field.getConstraints().getMaxRepeated();
+      }
+    }
+
+    int count;
+    if (min == max) {
+      count = min;
+    } else {
+      int upperBound = max < Integer.MAX_VALUE ? max + 1 : max;
+      count = faker.number().numberBetween(min, upperBound);
+    }
     Map<String, Object> map = new HashMap<>();
 
     for (int i = 0; i < count; i++) {
