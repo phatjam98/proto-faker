@@ -12,9 +12,12 @@
 - 🚀 **Zero Configuration**: Generate realistic fake data for any protobuf message out-of-the-box
 - 🎯 **Field-Name-Aware**: Automatically generates contextually appropriate data (emails look like emails, names like names)
 - 🔧 **Fluent API**: Easy field overrides with method chaining
-- 📊 **Full Field Support**: All protobuf field types including nested messages and repeated fields
+- 📊 **Full Field Support**: All protobuf field types including nested messages, repeated fields, maps, and oneofs
 - 🎲 **Customizable**: Control repeated field counts, override specific fields, and configure generation behavior
 - 📈 **Test-Friendly**: Designed specifically for testing scenarios with seamless integration
+- 🎯 **SchemaFaker** *(v0.2.0)*: Generate fake data from dynamic schemas without compiled protobuf classes
+- 🔥 **Anomaly Injection** *(v0.2.0)*: Generate out-of-bounds test data for edge case testing
+- 🔌 **Custom Generators** *(v0.2.0)*: Plug in your own generation logic per field
 
 ## 🚀 Quick Start
 
@@ -23,26 +26,26 @@
 <dependency>
     <groupId>com.phatjam98</groupId>
     <artifactId>proto-faker</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <scope>test</scope>
 </dependency>
 ```
 
 ### Gradle
 ```groovy
-testImplementation 'com.phatjam98:proto-faker:0.1.0'
+testImplementation 'com.phatjam98:proto-faker:0.2.0'
 ```
 
 ### Gradle (Kotlin DSL)
 ```kotlin
-testImplementation("com.phatjam98:proto-faker:0.1.0")
+testImplementation("com.phatjam98:proto-faker:0.2.0")
 ```
 
-✅ **Now available on Maven Central!** Get started with the official 0.1.0 release.
+✅ **Now available on Maven Central!** Get started with the latest 0.2.0 release.
 
 ### 🔬 SNAPSHOT Builds (Early Access)
 
-For the latest development features (including SchemaFaker, AnomalyInjector, and enhanced ProtoFaker), use SNAPSHOT versions:
+For bleeding-edge development features, use SNAPSHOT versions:
 
 **Gradle:**
 ```groovy
@@ -51,7 +54,7 @@ repositories {
     maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
 }
 dependencies {
-    testImplementation 'com.phatjam98:proto-faker:0.2.0-SNAPSHOT'
+    testImplementation 'com.phatjam98:proto-faker:0.3.0-SNAPSHOT'
 }
 ```
 
@@ -67,16 +70,10 @@ dependencies {
 <dependency>
     <groupId>com.phatjam98</groupId>
     <artifactId>proto-faker</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <scope>test</scope>
 </dependency>
 ```
-
-**Coming in v0.2.0:**
-- 🎯 **SchemaFaker**: Generate fake data from dynamic schemas without compiled protobuf classes
-- 🔥 **Anomaly Injection**: Generate out-of-bounds test data for edge case testing
-- 🔧 **Custom Field Generators**: Plug in your own generation logic per field
-- 🗺️ **Map & Oneof Support**: Full support for protobuf map and oneof fields
 
 ## 📖 Usage
 
@@ -159,6 +156,89 @@ UserProto user = new ProtoFaker<>(UserProto.class)
     .fake();
 ```
 
+## 🆕 New in v0.2.0
+
+### SchemaFaker - Dynamic Schema Generation
+
+Generate fake data without compiled protobuf classes using dynamic schemas:
+
+```java
+import com.phatjam98.protofaker.SchemaFaker;
+import com.phatjam98.protofaker.model.*;
+
+// Define your schema
+List<FieldDefinition> schema = Arrays.asList(
+    FieldDefinition.builder().name("email").type(FieldType.STRING).required(true).build(),
+    FieldDefinition.builder().name("age").type(FieldType.INTEGER)
+        .constraints(Constraints.builder().min(18.0).max(100.0).build()).build(),
+    FieldDefinition.builder().name("tags").type(FieldType.ARRAY)
+        .constraints(Constraints.builder().minRepeated(1).maxRepeated(5).build()).build()
+);
+
+// Generate fake data
+SchemaFaker schemaFaker = new SchemaFaker();
+Map<String, Object> payload = schemaFaker.fake(schema);
+// Result: {"email": "john.doe@example.com", "age": 42, "tags": ["lorem", "ipsum"]}
+
+// Generate multiple payloads
+List<Map<String, Object>> payloads = schemaFaker.fakes(schema, 100);
+```
+
+### Anomaly Injection for Edge Case Testing
+
+Generate out-of-bounds data for testing validation and error handling:
+
+```java
+SchemaFaker schemaFaker = new SchemaFaker()
+    .withAnomalyMode(10.0);  // 10% of objects contain anomalies
+
+// Anomalies include:
+// - Integers/Longs: Values 10x beyond constraints
+// - Strings: Empty, very long (3x max), or random bytes
+// - Timestamps: Epoch zero or far future (year 2099)
+// - Arrays: Empty or unusually large (100 items)
+```
+
+### Custom Field Generators
+
+Plug in your own generation logic:
+
+```java
+SchemaFaker schemaFaker = new SchemaFaker()
+    .withGenerator("transaction_id", (name, type, constraints) ->
+        "TXN-" + UUID.randomUUID().toString())
+    .withGenerator("sequence_number", (name, type, constraints) ->
+        counter.incrementAndGet());
+```
+
+### Map and Oneof Field Support
+
+ProtoFaker now fully supports protobuf map and oneof fields:
+
+```java
+// Map fields are automatically populated
+// map<string, int32> scores -> {"player_1": 100, "player_2": 85}
+
+// Control map entry count per field
+var faker = new ProtoFaker<>(GameProto.class)
+    .withRepeatedCount("scores", 3, 5);  // 3-5 map entries
+
+// Oneof fields: one field randomly selected per group
+// Override to force specific oneof selection
+var faker = new ProtoFaker<>(ContactProto.class)
+    .withField("email", "forced@example.com");  // Forces email in oneof
+```
+
+### Cycle Detection
+
+Safely handle self-referencing messages:
+
+```java
+// Prevent infinite recursion in tree structures
+var faker = new ProtoFaker<>(TreeNodeProto.class)
+    .withMaxDepth(3);  // Limit nesting to 3 levels (default: 5)
+```
+
 ## 🎯 Advanced Examples
 
 ### E-commerce Order Testing
@@ -220,6 +300,8 @@ ProtoFaker supports all Protocol Buffer field types:
 - ✅ **Complex Types**: `bytes`, `enum`, nested messages
 - ✅ **Repeated Fields**: All field types in repeated context
 - ✅ **Nested Messages**: Recursive generation with proper class resolution
+- ✅ **Map Fields** *(v0.2.0)*: `map<K, V>` with configurable entry counts
+- ✅ **Oneof Fields** *(v0.2.0)*: Random selection with override support
 
 ## 🧪 Testing Integration
 
@@ -269,7 +351,11 @@ def "should process user with fake data"() {
 | Fluent API | ✅ | ❌ | ⚠️ |
 | Nested Messages | ✅ | ⚠️ | ⚠️ |
 | Repeated Fields | ✅ | ⚠️ | ⚠️ |
+| Map & Oneof Fields | ✅ | ⚠️ | ❌ |
 | Template Support | ✅ | ⚠️ | ❌ |
+| Dynamic Schemas | ✅ | ❌ | ❌ |
+| Anomaly Injection | ✅ | ❌ | ❌ |
+| Custom Generators | ✅ | ⚠️ | ⚠️ |
 | Test Integration | ✅ | ❌ | ⚠️ |
 
 ## 📋 Requirements
