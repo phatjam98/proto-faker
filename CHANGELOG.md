@@ -5,6 +5,66 @@ All notable changes to ProtoFaker will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - v0.3.0
+
+### Added
+
+#### Input Validation
+- **Global `withRepeatedCount(int, int)` validation**: Now validates inputs like the per-field version
+  - Throws `IllegalArgumentException` if min is negative
+  - Throws `IllegalArgumentException` if max is less than min
+  - Provides clear error messages with actual values
+
+### Fixed
+
+- **Empty enum handling**: Now properly handles enums with no values (logs warning and skips)
+- **Single-value enum edge case**: Fixed edge case where enums with only an UNKNOWN value would cause errors
+
+### Changed
+
+- **Removed unused Jackson dependencies**: Removed `jackson-databind` and `jackson-dataformat-yaml` from build
+
+### Removed
+
+#### Breaking Changes - SchemaFaker Removal
+The following classes have been removed. They were originally added for the eventhorizon project but are out of scope for proto-faker's core mission of generating fake data for compiled Protocol Buffer messages:
+
+- **`SchemaFaker`**: Dynamic schema-based generation (removed)
+- **`AnomalyInjector`**: Anomaly injection for edge case testing (removed)
+- **`FieldGenerator`**: Custom field generation interface (removed)
+- **`model/FieldDefinition`**: Schema field definition (removed)
+- **`model/FieldType`**: Field type enum (removed)
+- **`model/Constraints`**: Value constraints (removed)
+
+**Migration**: If you were using SchemaFaker, consider using ProtoFaker with compiled protobuf messages instead, or implement similar functionality in your own project.
+
+### Dependencies
+
+#### Removed
+- `com.fasterxml.jackson.core:jackson-databind:2.14.2` - Unused
+- `com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.14.2` - Unused
+
+---
+
+## [0.2.0] - 2024-XX-XX
+
+### Added
+
+#### ProtoFaker Enhancements
+- **Map Field Support**: Properly generates protobuf map fields with configurable entry counts
+- **Oneof Field Handling**: Randomly selects one field per oneof group; field overrides take priority
+- **Cycle Detection**: `withMaxDepth(int maxDepth)` prevents infinite recursion in self-referencing messages (default: 5)
+- **Per-Field Repeated Counts**: `withRepeatedCount(String fieldName, int min, int max)` for fine-grained control
+- **Input Validation**: Validates min/max constraints with descriptive error messages
+- **Outer Class Name Resolution**: Handles underscore-to-CamelCase conversion for proto file names
+
+### Fixed
+
+- Fixed handling of nested messages in complex proto hierarchies
+- Fixed repeated field count edge cases when min equals max
+
+---
+
 ## [0.1.0] - 2024-09-07
 
 ### Initial Release - Major Milestone Achievement
@@ -25,7 +85,7 @@ ProtoFaker has successfully achieved its first production release to Maven Centr
 - **Template-Based Generation**: Use existing protobuf messages as templates for data generation
 - **Collection Support**: Generate multiple fake messages with `fakes(count)` methods
 - **Configurable Repeated Fields**: Control the count range for protobuf repeated fields
-- **Comprehensive Field Type Support**: 
+- **Comprehensive Field Type Support**:
   - All primitive types (string, int32, int64, uint32, uint64, etc.)
   - Complex types (bytes, enum, nested messages)
   - Repeated fields with configurable count ranges
@@ -134,79 +194,6 @@ None reported for this release.
 ### Contributors
 
 - **Travis Carter** (phatjam98@gmail.com) - Project creator and maintainer
-
----
-
-## [Unreleased] - v0.2.0
-
-### Added
-
-#### SchemaFaker - Dynamic Schema-Based Generation
-A new class for generating fake data payloads from dynamic schema definitions without requiring compiled protobuf classes. Produces `Map<String, Object>` payloads.
-
-- **Core Methods:**
-  - `fake(List<FieldDefinition> fields)` - Generate a single fake payload
-  - `fakes(List<FieldDefinition> fields, int count)` - Generate multiple fake payloads
-- **Configuration Methods:**
-  - `withField(String fieldName, Object value)` - Override specific field values
-  - `withRepeatedCount(String fieldName, int min, int max)` - Control array/repeated field sizes
-  - `withGenerator(String fieldName, FieldGenerator generator)` - Custom field generation logic
-  - `withAnomalyMode(double percentage)` - Enable anomaly injection (0-100%)
-  - `withConstraints(boolean respectConstraints)` - Toggle constraint enforcement
-
-#### AnomalyInjector - Edge Case Test Data Generation
-Generates anomalous values outside normal constraints for testing edge cases and boundary conditions.
-
-- **Anomaly Strategies:**
-  - Integer/Long: Values 10x beyond max constraint, or well below min
-  - Float/Double: Values 10 standard deviations from expected range
-  - String: Empty strings, very long strings (3x max length), or strings with random bytes
-  - Timestamp: Epoch zero (1970-01-01) or far future (2099)
-  - Array: Empty arrays or unusually large arrays (100 items)
-
-#### FieldGenerator Interface
-Functional interface for custom per-field generation logic:
-```java
-@FunctionalInterface
-public interface FieldGenerator {
-    Object generate(String fieldName, FieldType type, Constraints constraints);
-}
-```
-
-#### Model Classes
-- **FieldDefinition**: Immutable schema field definition
-  - Properties: `name`, `type`, `required`, `constraints`, `children`
-  - Builder pattern: `FieldDefinition.builder().name("email").type(FieldType.STRING).build()`
-- **FieldType**: Enum of supported types
-  - Values: `STRING`, `INTEGER`, `LONG`, `FLOAT`, `DOUBLE`, `BOOLEAN`, `TIMESTAMP`, `ARRAY`, `OBJECT`, `MAP`
-- **Constraints**: Value constraints for generation
-  - Properties: `min`, `max`, `pattern`, `maxLength`, `minRepeated`, `maxRepeated`
-  - Validation on build: min <= max, lengths >= 0
-
-#### ProtoFaker Enhancements
-- **Map Field Support**: Properly generates protobuf map fields with configurable entry counts
-- **Oneof Field Handling**: Randomly selects one field per oneof group; field overrides take priority
-- **Cycle Detection**: `withMaxDepth(int maxDepth)` prevents infinite recursion in self-referencing messages (default: 5)
-- **Per-Field Repeated Counts**: `withRepeatedCount(String fieldName, int min, int max)` for fine-grained control
-- **Input Validation**: Validates min/max constraints with descriptive error messages
-- **Outer Class Name Resolution**: Handles underscore-to-CamelCase conversion for proto file names (e.g., `foo_bar.proto` → `FooBarOuterClass`)
-
-### Changed
-
-- Internal refactoring for better separation of concerns
-- Improved error messages with field context
-
-### Fixed
-
-- Fixed handling of nested messages in complex proto hierarchies
-- Fixed repeated field count edge cases when min equals max
-
-### Development
-
-#### SNAPSHOT Publishing Workflow
-- Automated SNAPSHOT publishing from `main` branch to Maven Central
-- SNAPSHOT repository: `https://central.sonatype.com/repository/maven-snapshots/`
-- Recommended for testing integration changes before production releases
 
 ---
 

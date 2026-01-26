@@ -394,4 +394,28 @@ class ProtoFakerSpec extends Specification {
         result.getRepeatedStringValueCount() == 3
         result.getRepeatedInt32ValueCount() == 7
     }
+
+    def "global withRepeatedCount throws exception when max is less than min"() {
+        when:
+        new ProtoFaker<>(TestOuterClass.Test.class)
+                .withRepeatedCount(5, 2)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Maximum repeated count must be >= minimum")
+        e.message.contains("min=5")
+        e.message.contains("max=2")
+    }
+
+    def "global withRepeatedCount throws exception when min is negative"() {
+        when:
+        new ProtoFaker<>(TestOuterClass.Test.class)
+                .withRepeatedCount(-1, 5)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Minimum repeated count must be non-negative")
+        e.message.contains("min=-1")
+    }
+
 }
